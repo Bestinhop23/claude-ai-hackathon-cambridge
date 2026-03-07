@@ -135,6 +135,189 @@ function parseJSON(text: string | null): any {
 }
 
 // ────────────────────────────────────────────────────────────
+// Polymarket helpers
+// ────────────────────────────────────────────────────────────
+
+const POLY_NOISE_PATTERNS = [
+  /\b(nfl|nba|mlb|nhl|ncaa|football|soccer|basketball|baseball|tennis|golf|f1|nascar|ufc|mma|boxing|wimbledon|super\s*bowl)\b/i,
+  /\b(grammy|oscar|emmy|golden\s*globes|reality\s*show|love\s*is\s*blind|celebrity|influencer)\b/i,
+  /\b(governor|mayor|house\s+seat|state\s+senate|primary\s+election|local\s+election)\b/i,
+];
+
+const GLOBAL_MACRO_KEYWORDS = [
+  "tariff", "trade", "sanction", "war", "ceasefire", "oil", "gas", "opec", "inflation", "recession",
+  "interest rate", "federal reserve", "fed", "gdp", "unemployment", "debt ceiling", "shutdown",
+  "hurricane", "storm", "flood", "drought", "wildfire", "shipping", "supply chain", "regulation",
+  "china", "taiwan", "iran", "russia", "ukraine", "red sea", "suez",
+];
+
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasAnyKeyword(text: string, keywords: string[]): boolean {
+  const lower = text.toLowerCase();
+  return keywords.some((k) => lower.includes(k.toLowerCase()));
+}
+
+function isNoisyPolymarketQuestion(text: string): boolean {
+  return POLY_NOISE_PATTERNS.some((rx) => rx.test(text));
+}
+
+function parseOutcomePrices(raw: any): number[] {
+  if (Array.isArray(raw)) return raw.map((v) => toFiniteNumber(v));
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map((v: any) => toFiniteNumber(v)) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizePolymarketMarket(m: any, query: string) {
+  const id = String(m?.id ?? m?.condition_id ?? "");
+  const question = String(m?.question || m?.title || "").trim();
+  const slug = String(m?.slug || m?.market_slug || "").trim();
+  return {
+    id,
+    question,
+    description: String(m?.description || "").slice(0, 300),
+    outcomePrices: m?.outcomePrices ?? m?.outcome_prices ?? [],
+    outcomes: m?.outcomes ?? [],
+    volume: toFiniteNumber(m?.volume ?? m?.volumeNum ?? 0),
+    liquidity: toFiniteNumber(m?.liquidity ?? m?.liquidityNum ?? 0),
+    endDate: String(m?.end_date_iso || m?.endDate || ""),
+    active: m?.active ?? true,
+    slug,
+    url: slug ? `https://polymarket.com/event/${slug}` : `https://polymarket.com/search?query=${encodeURIComponent(query)}`,
+    _searchTerm: query,
+  };
+}
+
+function dedupeMarkets(markets: any[]) {
+  const seen = new Set<string>();
+  return markets.filter((m) => {
+    const id = String(m?.id || "");
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+async function fetchPolymarketMarketsByQueries(queries: string[], limit = 6): Promise<any[]> {
+  const settled = await Promise.allSettled(
+    queries.map(async (query) => {
+      try {
+        const res = await fetch(
+          `https://gamma-api.polymarket.com/markets?closed=false&limit=${limit}&search=${encodeURIComponent(query)}&order=volume&ascending=false`,
+          { headers: { Accept: "application/json" } },
+        );
+        if (!res.ok) {
+          await res.text();
+          return [];
+        }
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : [];
+        return arr.map((m: any) => normalizePolymarketMarket(m, query));
+      } catch {
+        return [];
+      }
+    }),
+  );
+
+  const merged: any[] = [];
+  for (const r of settled) {
+    if (r.status === "fulfilled") merged.push(...r.value);
+  }
+
+  return dedupeMarkets(merged).sort((a, b) => (b.volume || 0) - (a.volume || 0));
+}
+
+function buildCompanyMacroKeywords(symbol: string, companyName: string, industry: string): string[] {
+  const all = new Set<string>(GLOBAL_MACRO_KEYWORDS);
+  const lowerIndustry = (industry || "").toLowerCase();
+
+  const industryMap: Array<{ match: string[]; keywords: string[] }> = [
+    {
+      match: ["air freight", "courier", "logistics", "trucking", "transport"],
+      keywords: ["shipping", "freight", "air cargo", "diesel", "jet fuel", "tariff", "trade war", "hurricane", "port strike", "supply chain"],
+    },
+    {
+      match: ["aerospace", "defense"],
+      keywords: ["defense spending", "war", "nato", "missile", "iran", "taiwan", "china", "russia", "ukraine", "sanctions"],
+    },
+    {
+      match: ["semiconductor", "chip"],
+      keywords: ["chip export", "taiwan", "tsmc", "china", "ai demand", "supply chain", "tariff"],
+    },
+    {
+      match: ["oil", "energy", "gas"],
+      keywords: ["oil price", "opec", "natural gas", "pipeline", "sanctions", "middle east", "hurricane"],
+    },
+    {
+      match: ["pharma", "biotech", "healthcare"],
+      keywords: ["fda", "drug pricing", "medicare", "patent", "clinical trial", "regulation"],
+    },
+    {
+      match: ["financial", "bank", "insurance"],
+      keywords: ["interest rate", "federal reserve", "credit", "default", "recession", "bank regulation"],
+    },
+  ];
+
+  for (const entry of industryMap) {
+    if (entry.match.some((m) => lowerIndustry.includes(m))) {
+      entry.keywords.forEach((k) => all.add(k));
+    }
+  }
+
+  const ticker = (symbol || "").toLowerCase();
+  if (ticker) all.add(ticker);
+
+  const companyTerms = (companyName || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4)
+    .slice(0, 4);
+
+  companyTerms.forEach((t) => all.add(t));
+  return Array.from(all);
+}
+
+function scoreMarketRelevanceToCompany(market: any, keywords: string[]): number {
+  const question = String(market?.question || "");
+  const desc = String(market?.description || "");
+  const text = `${question} ${desc}`.toLowerCase();
+
+  let score = 0;
+  if (isNoisyPolymarketQuestion(text)) score -= 8;
+  if (hasAnyKeyword(text, GLOBAL_MACRO_KEYWORDS)) score += 2;
+
+  for (const keyword of keywords) {
+    if (text.includes(keyword.toLowerCase())) score += keyword.length > 8 ? 2 : 1;
+  }
+
+  const volume = toFiniteNumber(market?.volume);
+  if (volume >= 500000) score += 2;
+  else if (volume >= 100000) score += 1;
+
+  return score;
+}
+
+function sanitizeQueryTerms(queries: string[], fallback: string[], max = 10): string[] {
+  const cleaned = queries
+    .map((q) => String(q || "").trim())
+    .filter((q) => q.length >= 2 && q.length <= 48);
+
+  const deduped = Array.from(new Set([...cleaned, ...fallback]));
+  return deduped.slice(0, max);
+}
+
+// ────────────────────────────────────────────────────────────
 // Yahoo Finance helpers
 // ────────────────────────────────────────────────────────────
 
