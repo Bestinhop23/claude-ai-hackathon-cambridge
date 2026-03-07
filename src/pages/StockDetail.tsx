@@ -349,6 +349,7 @@ const StockDetail = () => {
           <TabBtn active={tab === "fundamentals"} label="Fundamentals" icon={BarChart3} onClick={() => setTab("fundamentals")} />
           <TabBtn active={tab === "deep"} label="Deep Analysis" icon={Crosshair} onClick={() => setTab("deep")} />
           <TabBtn active={tab === "polymarket"} label="Polymarket" onClick={() => setTab("polymarket")} customIcon={<PolymarketLogo size={14} />} />
+          <TabBtn active={tab === "sec"} label="SEC Filings" icon={Building2} onClick={() => setTab("sec")} />
           <TabBtn active={tab === "news"} label="News" icon={Newspaper} onClick={() => setTab("news")} />
         </div>
 
