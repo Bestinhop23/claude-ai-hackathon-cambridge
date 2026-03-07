@@ -1471,7 +1471,7 @@ Return JSON:
       return jsonResponse({ satellites });
     }
 
-    return jsonResponse({ error: `Unknown action: ${action}` }, 400);
+    return jsonResponse({ error: "Unknown action: " + action }, 400);
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error("Stock data error:", msg);
