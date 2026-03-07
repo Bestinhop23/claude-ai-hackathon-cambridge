@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Activity, BarChart3, Loader2, Briefcase, DollarSign } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Activity, BarChart3, Loader2, Briefcase, DollarSign, Newspaper } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
