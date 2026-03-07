@@ -387,9 +387,7 @@ const Index = () => {
         <div className="container mx-auto px-4 text-center text-xs text-muted-foreground">
           <p>
             {tab === "data" ? "Market data provided by Yahoo Finance. Prices may be delayed." :
-             tab === "insights" ? "Prediction market data via Polymarket. AI analysis powered by Claude." :
-             tab === "portfolio" ? "Simulated portfolio for demonstration. Not financial advice." :
-             "Ops map data via ADSB.lol · Digitraffic · NWS · Satellite feeds."}
+             "Simulated portfolio for demonstration. Not financial advice."}
           </p>
         </div>
       </footer>
