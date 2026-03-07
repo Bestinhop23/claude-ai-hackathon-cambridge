@@ -34,8 +34,9 @@ function parsePolyPrices(raw: any): number[] {
   return arr.map((v: any) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; });
 }
 
-const InsightsTab = () => {
-  const { data, isLoading } = useMarketInsights();
+const InsightsTab = ({ prefetchedData, prefetchLoading }: { prefetchedData?: any; prefetchLoading?: boolean }) => {
+  const data = prefetchedData;
+  const isLoading = prefetchLoading;
   const winners = data?.winners || [];
   const losers = data?.losers || [];
   const markets = data?.markets || [];
@@ -346,7 +347,8 @@ const PortfolioTab = () => {
 
 const Index = () => {
   const [tab, setTab] = useState<"data" | "insights" | "portfolio" | "map">("data");
-
+  // Prefetch insights data immediately so it's ready when user clicks the tab
+  const { data: insightsData, isLoading: insightsLoading } = useMarketInsights();
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
@@ -382,7 +384,7 @@ const Index = () => {
 
       <main className="container mx-auto px-4 py-4">
         {tab === "data" && <MarketOverview />}
-        {tab === "insights" && <InsightsTab />}
+        {tab === "insights" && <InsightsTab prefetchedData={insightsData} prefetchLoading={insightsLoading} />}
         {tab === "portfolio" && <PortfolioTab />}
         {tab === "map" && (
           <Suspense fallback={<div className="flex h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
