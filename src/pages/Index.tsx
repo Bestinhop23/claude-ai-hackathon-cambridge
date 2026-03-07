@@ -360,9 +360,7 @@ const Index = () => {
           <div className="ml-4 flex items-center gap-1 rounded-lg bg-muted p-1">
             {[
               { key: "data" as const, label: "Data", icon: BarChart3 },
-              { key: "insights" as const, label: "Insights", icon: Target },
               { key: "portfolio" as const, label: "My Portfolio", icon: Briefcase },
-              { key: "map" as const, label: "Ops Map", icon: Globe },
             ].map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
