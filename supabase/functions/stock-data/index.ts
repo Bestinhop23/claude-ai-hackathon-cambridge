@@ -1,5 +1,6 @@
-// stock-data edge function v2 – Claude primary, Polymarket, linked sources
+// stock-data edge function v3 – Claude primary, Polymarket, caching, linked sources
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,45 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// ────────────────────────────────────────────────────────────
+// DB Cache layer – uses api_cache table
+// ────────────────────────────────────────────────────────────
+
+function getSupabaseAdmin() {
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(url, key);
+}
+
+async function getCached(key: string): Promise<any | null> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data } = await sb
+      .from("api_cache")
+      .select("data, expires_at")
+      .eq("cache_key", key)
+      .single();
+    if (data && new Date(data.expires_at) > new Date()) {
+      return data.data;
+    }
+    // Clean up expired
+    if (data) {
+      sb.from("api_cache").delete().eq("cache_key", key).then(() => {});
+    }
+  } catch {}
+  return null;
+}
+
+async function setCache(key: string, data: any, ttlMinutes: number): Promise<void> {
+  try {
+    const sb = getSupabaseAdmin();
+    const expires_at = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
+    await sb.from("api_cache").upsert({ cache_key: key, data, expires_at }, { onConflict: "cache_key" });
+  } catch (e) {
+    console.error("Cache write failed:", e);
+  }
 }
 
 // ────────────────────────────────────────────────────────────

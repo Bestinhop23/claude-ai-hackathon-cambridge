@@ -34,8 +34,9 @@ function parsePolyPrices(raw: any): number[] {
   return arr.map((v: any) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; });
 }
 
-const InsightsTab = () => {
-  const { data, isLoading } = useMarketInsights();
+const InsightsTab = ({ prefetchedData, prefetchLoading }: { prefetchedData?: any; prefetchLoading?: boolean }) => {
+  const data = prefetchedData;
+  const isLoading = prefetchLoading;
   const winners = data?.winners || [];
   const losers = data?.losers || [];
   const markets = data?.markets || [];
