@@ -170,6 +170,7 @@ const PortfolioTab = () => {
 
 const Index = () => {
   const [tab, setTab] = useState<"data" | "portfolio">("data");
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
