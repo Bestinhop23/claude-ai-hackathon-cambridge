@@ -1098,7 +1098,7 @@ Return JSON:
         sentiment = parseJSON(sentimentText);
       }
 
-      return jsonResponse({
+      const analyzeResult = {
         brief,
         quote,
         news: news.slice(0, 8),
@@ -1112,7 +1112,10 @@ Return JSON:
           earnings: earnings.length > 0,
           aiAvailable: true,
         },
-      });
+      };
+
+      await setCache(cacheKey, analyzeResult, 30);
+      return jsonResponse(analyzeResult);
     }
 
     // ─── MARKET MOVERS (Top Winners / Losers) ──────────────
