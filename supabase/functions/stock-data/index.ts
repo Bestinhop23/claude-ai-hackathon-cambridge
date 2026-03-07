@@ -135,6 +135,172 @@ function parseJSON(text: string | null): any {
 }
 
 // ────────────────────────────────────────────────────────────
+// Polymarket relevance helpers
+// ────────────────────────────────────────────────────────────
+
+const POLY_NOISE_REGEX = /(nba|nfl|nhl|mlb|soccer|premier league|champions league|stanley cup|f1|formula 1|mma|ufc|wwe|tennis|golf|grammy|oscar|box office|celebrity|love island|kardashian|super bowl)/i;
+const POLY_MACRO_REGEX = /(tariff|trade|china|oil|diesel|opec|recession|inflation|interest rate|federal reserve|fed|war|sanction|shipping|freight|hurricane|wildfire|fda|drug pricing|antitrust|regulation|semiconductor|chip|export control|taiwan|debt ceiling|government shutdown|gdp|unemployment)/i;
+
+function parseOutcomePrices(raw: any): number[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((v) => Number(v) || 0);
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map((v) => Number(v) || 0) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function isNoiseMarket(m: any): boolean {
+  const text = `${m?.question || ""} ${m?.description || ""}`;
+  return POLY_NOISE_REGEX.test(text);
+}
+
+function scoreMarketRelevance(m: any, keywords: string[], searchTerms: string[]): number {
+  const text = `${m?.question || ""} ${m?.description || ""}`.toLowerCase();
+  let score = 0;
+
+  const volume = Number(m?.volume || 0);
+  if (volume > 1_000_000) score += 4;
+  else if (volume > 250_000) score += 3;
+  else if (volume > 50_000) score += 2;
+  else if (volume > 10_000) score += 1;
+
+  for (const kw of keywords) if (kw && text.includes(kw.toLowerCase())) score += 3;
+  for (const term of searchTerms) if (term && text.includes(term.toLowerCase())) score += 2;
+  if (POLY_MACRO_REGEX.test(text)) score += 2;
+
+  return score;
+}
+
+function pickTopRelevantMarkets(markets: any[], keywords: string[], searchTerms: string[], max = 4): any[] {
+  const dedup = new Map<string, any>();
+  for (const m of markets) {
+    const id = String(m?.id || "");
+    if (!id || dedup.has(id)) continue;
+    dedup.set(id, m);
+  }
+
+  const unique = Array.from(dedup.values());
+  const nonNoise = unique.filter((m) => !isNoiseMarket(m));
+  const scored = nonNoise
+    .map((m) => ({ ...m, _score: scoreMarketRelevance(m, keywords, searchTerms) }))
+    .sort((a, b) => (b._score - a._score) || ((b.volume || 0) - (a.volume || 0)));
+
+  const strong = scored.filter((m) => m._score >= 4).slice(0, max);
+  if (strong.length > 0) return strong;
+
+  const fallback = scored.slice(0, max);
+  if (fallback.length > 0) return fallback;
+
+  return unique
+    .sort((a, b) => (Number(b?.volume || 0) - Number(a?.volume || 0)))
+    .slice(0, max);
+}
+
+function deriveTheme(question: string): string {
+  const q = (question || "").toLowerCase();
+  if (/oil|diesel|opec|crude/.test(q)) return "energy";
+  if (/tariff|trade|china|export control|import/.test(q)) return "trade";
+  if (/interest rate|federal reserve|fed|treasury|yield/.test(q)) return "rates";
+  if (/recession|gdp|unemployment|inflation/.test(q)) return "macro";
+  if (/war|sanction|nato|taiwan|iran|ukraine/.test(q)) return "geopolitics";
+  if (/hurricane|wildfire|storm|climate/.test(q)) return "weather";
+  if (/fda|drug pricing|medicare/.test(q)) return "health";
+  if (/semiconductor|chip|ai regulation|antitrust/.test(q)) return "tech-policy";
+  return "macro";
+}
+
+function buildHeuristicInsights(markets: any[]) {
+  const mapping: Record<string, { winners: Array<{ symbol: string; name: string }>; losers: Array<{ symbol: string; name: string }>; reason: string }> = {
+    energy: {
+      winners: [{ symbol: "XOM", name: "Exxon Mobil" }, { symbol: "CVX", name: "Chevron" }, { symbol: "SLB", name: "Schlumberger" }],
+      losers: [{ symbol: "UPS", name: "United Parcel Service" }, { symbol: "FDX", name: "FedEx" }, { symbol: "DAL", name: "Delta Air Lines" }],
+      reason: "energy input costs and fuel sensitivity",
+    },
+    trade: {
+      winners: [{ symbol: "NUE", name: "Nucor" }, { symbol: "CLF", name: "Cleveland-Cliffs" }, { symbol: "X", name: "U.S. Steel" }],
+      losers: [{ symbol: "AAPL", name: "Apple" }, { symbol: "WMT", name: "Walmart" }, { symbol: "AMZN", name: "Amazon" }],
+      reason: "import/export exposure and tariff pass-through",
+    },
+    rates: {
+      winners: [{ symbol: "JPM", name: "JPMorgan" }, { symbol: "BAC", name: "Bank of America" }, { symbol: "MS", name: "Morgan Stanley" }],
+      losers: [{ symbol: "NVDA", name: "NVIDIA" }, { symbol: "TSLA", name: "Tesla" }, { symbol: "ADBE", name: "Adobe" }],
+      reason: "discount-rate sensitivity and financing costs",
+    },
+    geopolitics: {
+      winners: [{ symbol: "LMT", name: "Lockheed Martin" }, { symbol: "RTX", name: "RTX" }, { symbol: "NOC", name: "Northrop Grumman" }],
+      losers: [{ symbol: "UPS", name: "United Parcel Service" }, { symbol: "FDX", name: "FedEx" }, { symbol: "AAL", name: "American Airlines" }],
+      reason: "defense demand versus global transport disruption",
+    },
+    weather: {
+      winners: [{ symbol: "HUBB", name: "Hubbell" }, { symbol: "ETN", name: "Eaton" }, { symbol: "PWR", name: "Quanta Services" }],
+      losers: [{ symbol: "ALL", name: "Allstate" }, { symbol: "TRV", name: "Travelers" }, { symbol: "PGR", name: "Progressive" }],
+      reason: "infrastructure resilience spend versus catastrophe losses",
+    },
+    health: {
+      winners: [{ symbol: "UNH", name: "UnitedHealth" }, { symbol: "ELV", name: "Elevance" }, { symbol: "CI", name: "Cigna" }],
+      losers: [{ symbol: "PFE", name: "Pfizer" }, { symbol: "MRK", name: "Merck" }, { symbol: "BMY", name: "Bristol Myers" }],
+      reason: "policy and drug-pricing pressure",
+    },
+    "tech-policy": {
+      winners: [{ symbol: "INTC", name: "Intel" }, { symbol: "QCOM", name: "Qualcomm" }, { symbol: "AVGO", name: "Broadcom" }],
+      losers: [{ symbol: "NVDA", name: "NVIDIA" }, { symbol: "AMAT", name: "Applied Materials" }, { symbol: "LRCX", name: "Lam Research" }],
+      reason: "export controls and regulatory constraints",
+    },
+    macro: {
+      winners: [{ symbol: "WMT", name: "Walmart" }, { symbol: "COST", name: "Costco" }, { symbol: "PG", name: "Procter & Gamble" }],
+      losers: [{ symbol: "CAT", name: "Caterpillar" }, { symbol: "DE", name: "Deere" }, { symbol: "F", name: "Ford" }],
+      reason: "defensive demand versus cyclical risk",
+    },
+  };
+
+  const winners: any[] = [];
+  const losers: any[] = [];
+  const seenW = new Set<string>();
+  const seenL = new Set<string>();
+
+  for (const market of markets.slice(0, 10)) {
+    const prices = parseOutcomePrices(market.outcomePrices);
+    const yes = prices[0] != null ? `${Math.round(prices[0] * 100)}%` : "?";
+    const theme = deriveTheme(market.question || "");
+    const pack = mapping[theme] || mapping.macro;
+
+    for (const s of pack.winners) {
+      if (seenW.has(s.symbol) || winners.length >= 6) continue;
+      winners.push({
+        symbol: s.symbol,
+        name: s.name,
+        relevantMarket: market.question,
+        impliedProbability: yes,
+        thesis: `${s.name} is positioned to benefit from ${pack.reason} if this market resolves as currently priced.`,
+      });
+      seenW.add(s.symbol);
+    }
+
+    for (const s of pack.losers) {
+      if (seenL.has(s.symbol) || losers.length >= 6) continue;
+      losers.push({
+        symbol: s.symbol,
+        name: s.name,
+        relevantMarket: market.question,
+        impliedProbability: yes,
+        thesis: `${s.name} faces downside risk from ${pack.reason} under the current market-implied path.`,
+      });
+      seenL.add(s.symbol);
+    }
+
+    if (winners.length >= 6 && losers.length >= 6) break;
+  }
+
+  return { winners: winners.slice(0, 6), losers: losers.slice(0, 6) };
+}
+
+// ────────────────────────────────────────────────────────────
 // Yahoo Finance helpers
 // ────────────────────────────────────────────────────────────
 
