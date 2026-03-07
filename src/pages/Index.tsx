@@ -7,6 +7,7 @@ import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import MarketOverview from "@/components/MarketOverview";
 import StockLogo from "@/components/StockLogo";
+import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { useMultiQuote, type YahooQuote } from "@/hooks/useStockData";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
@@ -193,14 +194,13 @@ const Index = () => {
                 <t.icon className="h-4 w-4" />{t.label}
               </button>
             ))}
+            <button
+              onClick={() => navigate("/news")}
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-all"
+            >
+              <Newspaper className="h-4 w-4" />News
+            </button>
           </div>
-
-          <button
-            onClick={() => navigate("/news")}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-all"
-          >
-            <Newspaper className="h-4 w-4" />News
-          </button>
 
           <div className="ml-auto flex items-center gap-2">
             <CurrencySelector />
@@ -208,6 +208,8 @@ const Index = () => {
           </div>
         </div>
       </header>
+
+      <RiskDisclaimer />
 
       <main className="container mx-auto px-4 py-4">
         {tab === "data" && <MarketOverview />}

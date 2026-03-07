@@ -8,6 +8,7 @@ import {
   Crosshair, MapPin, Calendar, DollarSign, Briefcase, Phone, Bot,
 } from "lucide-react";
 import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary, useSecFilings } from "@/hooks/useStockData";
+import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import StockChart from "@/components/StockChart";
 import StockLogo from "@/components/StockLogo";
@@ -247,6 +248,8 @@ const StockDetail = () => {
           </div>
         </div>
       </header>
+
+      <RiskDisclaimer />
 
       <main className="container mx-auto px-4 py-4 max-w-7xl">
         {/* ── Price header + Chart (always visible) ──────── */}

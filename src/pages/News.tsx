@@ -1,10 +1,11 @@
-import { Activity, Newspaper, Loader2, ExternalLink, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { Activity, Newspaper, Loader2, ExternalLink, TrendingUp, TrendingDown, BarChart3, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGlobalNews } from "@/hooks/useStockData";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import StockLogo from "@/components/StockLogo";
+import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { toast } from "@/hooks/use-toast";
 
 const News = () => {
@@ -50,6 +51,12 @@ const News = () => {
               <BarChart3 className="h-4 w-4" />Data
             </button>
             <button
+              onClick={() => navigate("/")}
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-all"
+            >
+              <Briefcase className="h-4 w-4" />My Portfolio
+            </button>
+            <button
               className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium bg-background text-foreground shadow-sm transition-all"
             >
               <Newspaper className="h-4 w-4" />News
@@ -62,6 +69,8 @@ const News = () => {
           </div>
         </div>
       </header>
+
+      <RiskDisclaimer />
 
       <main className="container mx-auto px-4 py-6 max-w-5xl">
         <div className="flex items-center gap-2 mb-6">
