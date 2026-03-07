@@ -1297,110 +1297,122 @@ Return JSON:
       return jsonResponse({ picks: enrichedPicks, macro, headlines: macroNews.slice(0, 6) });
     }
 
-    // ─── MARKET INSIGHTS (Polymarket-driven stock analysis) — cached 60min ──
+    // ─── MARKET INSIGHTS (Claude-ranked macro market to equity map) — cached 60min ──
     if (action === "market-insights") {
-      const cacheKey = "market-insights-v1";
+      const cacheKey = "market-insights-v2";
       const cached = await getCached(cacheKey);
-      if (cached) {
+      if (cached?.markets?.length >= 4 && (cached?.winners?.length || cached?.losers?.length)) {
         console.log("[market-insights] returning cached result");
         return jsonResponse(cached);
       }
 
       try {
-        const allMarkets: any[] = [];
-        
-        // Search for high-impact macro/geopolitical markets that directly affect equities
         const searchQueries = [
-          "tariff", "recession", "Federal Reserve rate", "S&P 500",
-          "oil price", "China trade", "inflation", "NATO", "war",
-          "sanctions", "GDP", "unemployment", "government shutdown",
-          "debt ceiling", "OPEC production"
+          "tariff",
+          "trade war",
+          "oil price",
+          "opec",
+          "federal reserve",
+          "interest rate",
+          "inflation",
+          "recession",
+          "unemployment",
+          "debt ceiling",
+          "government shutdown",
+          "china taiwan",
+          "iran",
+          "ukraine",
+          "sanctions",
+          "hurricane",
+          "drought",
+          "shipping disruption",
+          "supply chain",
         ];
-        
-        // Parallel fetch all search queries
-        const fetchResults = await Promise.allSettled(
-          searchQueries.map(async (q) => {
-            try {
-              const res = await fetch(
-                `https://gamma-api.polymarket.com/markets?closed=false&limit=3&search=${encodeURIComponent(q)}&order=volume&ascending=false`,
-                { headers: { Accept: "application/json" } }
-              );
-              if (res.ok) {
-                const data = await res.json();
-                return (Array.isArray(data) ? data : []).map((m: any) => ({
-                  id: m.id,
-                  question: m.question || m.title || "",
-                  description: (m.description || "").slice(0, 200),
-                  outcomePrices: m.outcomePrices || "[]",
-                  outcomes: m.outcomes || "[]",
-                  volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
-                  slug: m.slug || "",
-                  url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com`,
-                  endDate: m.end_date_iso || m.endDate || "",
-                }));
-              }
-              await res.text();
-              return [];
-            } catch { return []; }
-          })
-        );
-        
-        for (const r of fetchResults) {
-          if (r.status === "fulfilled") allMarkets.push(...r.value);
+
+        const allMarkets = await fetchPolymarketMarketsByQueries(searchQueries, 6);
+        if (allMarkets.length === 0) {
+          const emptyResult = {
+            winners: [],
+            losers: [],
+            markets: [],
+            summary: "No actionable macro prediction markets found right now.",
+            searchUrl: "https://polymarket.com",
+          };
+          await setCache(cacheKey, emptyResult, 20);
+          return jsonResponse(emptyResult);
         }
 
-        // Dedupe and sort by volume
-        const seen = new Set<string>();
-        const unique = allMarkets.filter(m => {
-          if (!m.id || seen.has(m.id)) return false;
-          seen.add(m.id);
-          return true;
-        }).sort((a, b) => (b.volume || 0) - (a.volume || 0)).slice(0, 20);
+        const macroCandidates = allMarkets
+          .filter((m) => {
+            const text = `${m.question} ${m.description}`.toLowerCase();
+            return hasAnyKeyword(text, GLOBAL_MACRO_KEYWORDS) && !isNoisyPolymarketQuestion(text);
+          })
+          .slice(0, 30);
 
-        // Ask AI to identify stock winners/losers with detailed thesis
-        const marketSummary = unique.slice(0, 12).map((m: any, i: number) => {
-          let prices: any[] = [];
-          try { prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices; } catch {}
-          const yesPrice = prices[0] ? `${(parseFloat(prices[0]) * 100).toFixed(0)}%` : "?";
-          return `${i + 1}. "${m.question}" (YES: ${yesPrice}, Vol: $${Math.round((m.volume || 0) / 1000)}K)`;
+        const candidatePool = (macroCandidates.length > 0 ? macroCandidates : allMarkets).slice(0, 30);
+
+        const candidateListText = candidatePool.map((m: any, i: number) => {
+          const prices = parseOutcomePrices(m.outcomePrices);
+          const yes = prices.length > 0 ? `${(toFiniteNumber(prices[0]) * 100).toFixed(0)}%` : "?";
+          return `${i + 1}. ${m.question} | YES=${yes} | Vol=$${Math.round((m.volume || 0) / 1000)}K`;
         }).join("\n");
 
-        const text = await callAI(
-          "You are an elite macro strategist at a top hedge fund. You translate prediction market probabilities into specific, actionable equity trades with detailed causal reasoning. Respond ONLY with valid JSON.",
-          `These are LIVE prediction markets with real money behind them:
-
-${marketSummary}
-
-Identify stocks that would be DIRECTLY and MATERIALLY affected if these outcomes materialize. Focus on the highest-volume, highest-conviction markets.
-
-For each stock pick:
-- Trace the SPECIFIC causal chain from the prediction market outcome to the stock's revenue/costs
-- Include rough magnitude of impact (e.g., "could reduce revenue by ~5-10%")
-- Reference the specific prediction market probability
-
-Return JSON:
-{
-  "winners": [{ "symbol": "...", "name": "...", "thesis": "2-3 sentence detailed thesis with specific numbers and causal chain from the prediction market to stock impact", "relevantMarket": "the exact prediction market question", "impliedProbability": "the YES price" }],
-  "losers": [{ "symbol": "...", "name": "...", "thesis": "2-3 sentence detailed thesis with specific numbers and causal chain", "relevantMarket": "the exact prediction market question", "impliedProbability": "the YES price" }],
-  "summary": "3-4 sentence macro overview synthesizing the key signals from prediction markets into an investment narrative"
-}
-
-Provide 4-6 winners and 4-6 losers. Be specific and quantitative.`,
-          2500,
+        const selectText = await callAI(
+          "You are a strict macro relevance ranker for equities. Return ONLY valid JSON.",
+          `Choose the 8-10 most globally relevant macro/geopolitical prediction markets for broad US stock impact.\n\nReject sports, entertainment, celebrity, and local election races.\n\nReturn JSON:\n{ "indices": [1,2,3], "summary": "one short sentence" }\n\nMarkets:\n${candidateListText}`,
+          350,
         );
 
-        const parsed = parseJSON(text);
+        const selectedParsed = parseJSON(selectText);
+        const pickedIndices = Array.isArray(selectedParsed?.indices) ? selectedParsed.indices : [];
+
+        const selectedMarkets = dedupeMarkets(
+          pickedIndices
+            .map((i: any) => candidatePool[Math.max(0, Number(i) - 1)])
+            .filter(Boolean),
+        ).slice(0, 10);
+
+        const marketsForInsights = (selectedMarkets.length >= 6 ? selectedMarkets : candidatePool.slice(0, 10));
+
+        const summaryInput = marketsForInsights.map((m: any, i: number) => {
+          const prices = parseOutcomePrices(m.outcomePrices);
+          const yes = prices.length > 0 ? `${(toFiniteNumber(prices[0]) * 100).toFixed(0)}%` : "?";
+          return `${i + 1}. "${m.question}" (YES ${yes}, Vol $${Math.round((m.volume || 0) / 1000)}K)`;
+        }).join("\n");
+
+        const insightsText = await callAI(
+          "You are a top-down macro equity strategist. Return ONLY valid JSON.",
+          `Using these LIVE prediction markets, identify equity winners and losers with causal links.\n\n${summaryInput}\n\nReturn JSON:\n{\n  "winners": [{ "symbol": "...", "name": "...", "thesis": "1-2 sentences with causal chain", "relevantMarket": "exact market", "impliedProbability": "YES %" }],\n  "losers": [{ "symbol": "...", "name": "...", "thesis": "1-2 sentences with causal chain", "relevantMarket": "exact market", "impliedProbability": "YES %" }],\n  "summary": "2-3 sentence macro narrative"\n}\n\nProvide 3-5 winners and 3-5 losers. Keep it specific and practical.`,
+          1900,
+        );
+
+        let parsed = parseJSON(insightsText);
+        let winners = Array.isArray(parsed?.winners) ? parsed.winners.slice(0, 6) : [];
+        let losers = Array.isArray(parsed?.losers) ? parsed.losers.slice(0, 6) : [];
+        let summary = parsed?.summary || selectedParsed?.summary || "";
+
+        // Retry once with a tighter schema if Claude returns empty structure
+        if (winners.length === 0 && losers.length === 0) {
+          const retryText = await callAI(
+            "Return ONLY valid JSON and include non-empty arrays.",
+            `From these prediction markets:\n${summaryInput}\n\nReturn JSON with exactly this shape:\n{ "winners": [{"symbol":"","name":"","thesis":"","relevantMarket":"","impliedProbability":""}], "losers": [{"symbol":"","name":"","thesis":"","relevantMarket":"","impliedProbability":""}], "summary": "" }\n\nProvide at least 2 winners and 2 losers.",
+            1200,
+          );
+          parsed = parseJSON(retryText);
+          winners = Array.isArray(parsed?.winners) ? parsed.winners.slice(0, 6) : winners;
+          losers = Array.isArray(parsed?.losers) ? parsed.losers.slice(0, 6) : losers;
+          summary = parsed?.summary || summary;
+        }
+
         const result = {
-          winners: parsed?.winners || [],
-          losers: parsed?.losers || [],
-          summary: parsed?.summary || "",
-          markets: unique.slice(0, 10),
-          searchUrl: "https://polymarket.com",
+          winners,
+          losers,
+          summary: summary || "Prediction markets are mixed, but macro risk remains elevated across rates, trade, and geopolitical channels.",
+          markets: marketsForInsights,
+          searchUrl: marketsForInsights[0]?.url || "https://polymarket.com",
         };
 
-        // Cache for 60 minutes
         await setCache(cacheKey, result, 60);
-
         return jsonResponse(result);
       } catch (e) {
         return jsonResponse({ winners: [], losers: [], markets: [], summary: "", error: String(e) });
