@@ -802,6 +802,52 @@ const StockDetail = () => {
             </Section>
           </div>
         )}
+
+        {/* ═══════ SEC FILINGS TAB ═══════ */}
+        {tab === "sec" && (
+          <div className="space-y-4">
+            <Section icon={Building2} title={`SEC Filings — ${upperSymbol}`} loading={secLoading} badge={<ClaudeBadge label="AI Summaries" />}>
+              {secData?.filings?.length ? (
+                <div className="space-y-3">
+                  {secData.filings.map((f: any, i: number) => (
+                    <a
+                      key={i}
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-secondary/40 rounded-lg p-4 hover:bg-secondary/60 transition-colors border border-transparent hover:border-primary/20"
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-xs font-mono font-bold text-primary px-2 py-1 bg-primary/10 rounded">
+                          {f.form}
+                        </span>
+                        <span className="text-[11px] font-semibold text-foreground flex-1">
+                          {f.description}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {f.filingDate}
+                        </span>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </div>
+                      <p className="text-[10px] text-foreground/70 leading-relaxed border-l-2 pl-3" style={{ borderColor: CLAUDE_ORANGE }}>
+                        {f.summary}
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              ) : secLoading ? (
+                <div className="flex items-center gap-2 py-8 justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin" style={{ color: CLAUDE_ORANGE }} />
+                  <span className="text-xs text-muted-foreground">Fetching SEC filings from EDGAR…</span>
+                </div>
+              ) : (
+                <p className="text-[10px] text-muted-foreground text-center py-6">
+                  No SEC filings found for {upperSymbol}
+                </p>
+              )}
+            </Section>
+          </div>
+        )}
       </main>
     </div>
   );
