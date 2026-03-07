@@ -711,11 +711,18 @@ serve(async (req) => {
       return jsonResponse({ impact: parseJSON(text) });
     }
 
-    // ─── DEEP ANALYSIS (Supply chain, weather, predictions, verticals) ──
+    // ─── DEEP ANALYSIS — cached 120min per stock ──
     if (action === "deep-analysis") {
       const { symbol, companyName, profile } = params;
       const name = companyName || symbol;
       const industry = profile?.finnhubIndustry || "Unknown";
+
+      const cacheKey = `deep-analysis-${symbol}-v1`;
+      const cached = await getCached(cacheKey);
+      if (cached) {
+        console.log(`[deep-analysis] ${symbol}: returning cached result`);
+        return jsonResponse(cached);
+      }
 
       const text = await callAI(
         `You are an elite institutional equity research analyst with deep expertise in supply chain analysis, macro-event impact modeling, and competitive dynamics. You produce Bloomberg-terminal grade intelligence. CRITICAL: For every claim, include a source URL where possible (SEC filings, Reuters, Bloomberg, company IR pages, government sites). Respond ONLY with valid JSON.`,
@@ -762,7 +769,9 @@ Return JSON:
         4000,
       );
 
-      return jsonResponse({ analysis: parseJSON(text) });
+      const result = { analysis: parseJSON(text) };
+      await setCache(cacheKey, result, 120);
+      return jsonResponse(result);
     }
 
     // ─── POLYMARKET (Real prediction market data) — cached 30min per stock ──
