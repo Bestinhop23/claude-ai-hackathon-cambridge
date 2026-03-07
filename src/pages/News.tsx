@@ -1,10 +1,11 @@
-import { Activity, Newspaper, Loader2, ExternalLink, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { Activity, Newspaper, Loader2, ExternalLink, TrendingUp, TrendingDown, BarChart3, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGlobalNews } from "@/hooks/useStockData";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import StockLogo from "@/components/StockLogo";
+import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { toast } from "@/hooks/use-toast";
 
 const News = () => {

@@ -7,6 +7,7 @@ import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import MarketOverview from "@/components/MarketOverview";
 import StockLogo from "@/components/StockLogo";
+import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { useMultiQuote, type YahooQuote } from "@/hooks/useStockData";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
