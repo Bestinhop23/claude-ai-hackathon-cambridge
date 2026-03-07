@@ -134,7 +134,7 @@ const StockDetail = () => {
   const { data: polyData, isLoading: polyLoading } = usePolymarket(tab === "polymarket" ? upperSymbol : "", quote?.shortName || quote?.longName, profileData?.profile);
   const { data: polySummary, isLoading: polySummaryLoading } = usePolymarketSummary(tab === "polymarket" ? upperSymbol : "", quote?.shortName || quote?.longName, polyData?.markets || [], profileData?.profile);
   const { data: sentimentData, isLoading: sentimentLoading } = useSentiment(upperSymbol, articles);
-  const { data: secData, isLoading: secLoading } = useSecFilings(upperSymbol);
+  const { data: secData, isLoading: secLoading } = useSecFilings(tab === "sec" ? upperSymbol : "");
 
   const isPositive = (quote?.regularMarketChange ?? 0) >= 0;
   const [displayPrice, setDisplayPrice] = useState<number | null>(null);
