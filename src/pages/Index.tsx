@@ -208,6 +208,8 @@ const Index = () => {
         </div>
       </header>
 
+      <RiskDisclaimer />
+
       <main className="container mx-auto px-4 py-4">
         {tab === "data" && <MarketOverview />}
         {tab === "portfolio" && <PortfolioTab />}
