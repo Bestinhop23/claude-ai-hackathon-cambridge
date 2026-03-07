@@ -944,10 +944,9 @@ Return JSON:
     if (action === "polymarket") {
       const { symbol, companyName, profile } = params;
       const name = companyName || symbol;
-      const industry = profile?.finnhubIndustry || "";
-      const weburl = profile?.weburl || "";
-      
-      const cacheKey = `polymarket-${symbol}-v2`;
+      const industry = String(profile?.finnhubIndustry || "");
+
+      const cacheKey = `polymarket-${symbol}-v3`;
       const cached = await getCached(cacheKey);
       if (cached) {
         console.log(`[polymarket] ${symbol}: returning cached result`);
@@ -955,177 +954,87 @@ Return JSON:
       }
 
       try {
-        // Step 1: Claude generates VERY specific, granular search terms
-        // Use a detailed industry map to avoid generic searches
         const industryMap: Record<string, string[]> = {
-          "air freight": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "supply chain"],
-          "trucking": ["tariff", "oil price", "diesel", "recession", "highway"],
-          "logistics": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "supply chain"],
-          "transportation": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel"],
-          "defense": ["war", "NATO", "defense spending", "Iran", "military"],
-          "aerospace": ["war", "NATO", "defense spending", "Boeing", "FAA"],
-          "pharma": ["FDA", "drug pricing", "Medicare", "patent"],
-          "biotech": ["FDA approval", "clinical trial", "drug pricing"],
-          "technology": ["AI regulation", "antitrust", "data privacy", "semiconductor"],
-          "software": ["AI regulation", "antitrust", "data privacy", "cybersecurity"],
-          "semiconductor": ["chip export", "TSMC", "China semiconductor", "AI chip"],
-          "banking": ["interest rate", "recession", "bank regulation", "credit"],
+          "air freight": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "global shipping"],
+          "logistics": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "global shipping"],
+          "transport": ["tariff", "oil price", "trade war", "hurricane", "freight rates"],
+          "defense": ["war", "nato", "defense spending", "iran", "sanctions"],
+          "aerospace": ["war", "nato", "defense spending", "faa", "aircraft"],
+          "pharma": ["fda", "drug pricing", "medicare", "patent"],
+          "biotech": ["fda approval", "clinical trial", "drug pricing"],
+          "software": ["ai regulation", "antitrust", "data privacy", "cybersecurity"],
+          "semiconductor": ["chip export", "taiwan", "china semiconductor", "ai chip", "export controls"],
+          "bank": ["interest rate", "recession", "bank regulation", "credit"],
           "financial": ["interest rate", "recession", "regulation", "credit"],
           "insurance": ["hurricane", "wildfire", "climate", "interest rate"],
-          "oil": ["oil price", "OPEC", "sanctions", "pipeline", "natural gas"],
-          "energy": ["oil price", "renewable energy", "nuclear", "natural gas"],
-          "mining": ["commodity price", "China demand", "lithium", "copper"],
+          "energy": ["oil price", "opec", "sanctions", "natural gas"],
           "retail": ["consumer spending", "recession", "tariff", "inflation"],
-          "auto": ["EV", "tariff", "interest rate", "oil price"],
-          "food": ["commodity price", "drought", "food safety", "tariff"],
-          "media": ["streaming", "advertising", "TikTok", "regulation"],
-          "telecom": ["spectrum", "5G", "regulation", "net neutrality"],
-          "real estate": ["interest rate", "housing market", "recession"],
-          "healthcare": ["Medicare", "drug pricing", "FDA", "regulation"],
+          "auto": ["ev", "tariff", "interest rate", "oil price"],
         };
 
-        // Find matching industry terms
+        const defaultMacroTerms = ["tariff", "recession", "interest rate", "inflation", "oil price", "war", "sanctions", "china trade"];
         let searchTerms: string[] = [];
-        const industryLower = industry.toLowerCase();
-        for (const [key, terms] of Object.entries(industryMap)) {
-          if (industryLower.includes(key)) {
+
+        const loweredIndustry = industry.toLowerCase();
+        for (const [k, terms] of Object.entries(industryMap)) {
+          if (loweredIndustry.includes(k)) {
             searchTerms = terms;
             break;
           }
         }
 
-        // If no match, ask Claude
-        if (searchTerms.length === 0) {
-          const searchTermsText = await callAI(
-            "Return ONLY a JSON array of 4-6 strings. NO explanation.",
-            `Company: ${symbol} (${name}), Industry: ${industry}
-Generate Polymarket search terms for events that would move this stock ±5%.
-DO NOT search for the company name. Search for EXTERNAL events (tariffs, wars, regulations, commodity prices, weather, etc).
-Examples: "oil price", "tariff China", "hurricane", "interest rate", "FDA approval"`,
-            150,
-          );
-          try {
-            const parsed = JSON.parse(searchTermsText || "[]");
-            searchTerms = Array.isArray(parsed) ? parsed.slice(0, 6) : [];
-          } catch {
-            searchTerms = ["tariff", "recession", "interest rate", "regulation"];
-          }
-        }
+        if (searchTerms.length === 0) searchTerms = defaultMacroTerms;
+        searchTerms = Array.from(new Set([...searchTerms, ...defaultMacroTerms])).slice(0, 12);
 
-        console.log(`[polymarket] ${symbol}: searching with terms: ${JSON.stringify(searchTerms)}`);
+        console.log(`[polymarket] ${symbol}: search terms ${JSON.stringify(searchTerms)}`);
 
-        const allMarkets: any[] = [];
-        
-        // Fetch ALL search terms in parallel
-        const fetches = searchTerms.map(async (term) => {
-          try {
+        const fetches = await Promise.allSettled(
+          searchTerms.map(async (term) => {
             const res = await fetch(
-              `https://gamma-api.polymarket.com/markets?closed=false&limit=5&search=${encodeURIComponent(term)}&order=volume&ascending=false`,
-              { headers: { Accept: "application/json" } }
+              `https://gamma-api.polymarket.com/markets?closed=false&limit=25&search=${encodeURIComponent(term)}&order=volume&ascending=false`,
+              { headers: { Accept: "application/json" } },
             );
-            if (res.ok) {
-              const data = await res.json();
-              return (Array.isArray(data) ? data : []).map((m: any) => ({
-                id: m.id || m.condition_id,
-                question: m.question || m.title || "",
-                description: (m.description || "").slice(0, 300),
-                outcomePrices: m.outcomePrices || m.outcome_prices || [],
-                outcomes: m.outcomes || [],
-                volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
-                liquidity: Number(m.liquidity ?? m.liquidityNum ?? 0) || 0,
-                endDate: m.end_date_iso || m.endDate || "",
-                active: m.active ?? true,
-                slug: m.slug || m.market_slug || "",
-                url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com/search?query=${encodeURIComponent(term)}`,
-                _searchTerm: term,
-              }));
+            if (!res.ok) {
+              await res.text();
+              return [];
             }
-            await res.text();
-            return [];
-          } catch { return []; }
-        });
-        
-        const results = await Promise.all(fetches);
-        results.forEach(r => allMarkets.push(...r));
-        
-        // Deduplicate by id
-        const seen = new Set<string>();
-        const unique = allMarkets.filter(m => {
-          if (!m.id || seen.has(m.id)) return false;
-          seen.add(m.id);
-          return true;
-        });
-
-        console.log(`[polymarket] ${symbol}: found ${unique.length} unique markets`);
-
-        if (unique.length === 0) {
-          const emptyResult = { markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` };
-          await setCache(cacheKey, emptyResult, 30);
-          return jsonResponse(emptyResult);
-        }
-
-        // Step 2: Claude picks ONLY the 2-4 most directly relevant
-        const marketsForFilter = unique.slice(0, 25).map((m: any, i: number) => {
-          let prices: any[] = [];
-          try { prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices || []; } catch {}
-          const yesPrice = prices[0] ? `${(parseFloat(prices[0]) * 100).toFixed(0)}%` : "?";
-          return `${i + 1}. "${m.question}" (YES: ${yesPrice}, Vol: $${Math.round((m.volume || 0) / 1000)}K)`;
-        }).join("\n");
-
-        const filterText = await callAI(
-          "You are an expert stock analyst. Return ONLY a JSON array of integers (1-indexed), or empty array []. NO explanation.",
-          `Company: ${symbol} (${name}), Industry: ${industry}
-
-Pick ONLY markets where the outcome would DIRECTLY affect ${symbol}'s revenue, costs, supply chain, or stock price by ≥3%.
-
-REJECT:
-- Sports, entertainment, pop culture, elections (unless the company IS in politics/media)
-- Markets about individual people's personal lives
-- Anything where you can't explain a clear $ impact on ${symbol}
-
-KEEP:
-- Trade policy, tariffs affecting this company's imports/exports
-- Commodity prices the company depends on (oil for logistics, chips for tech, etc)
-- Regulatory actions targeting this industry
-- Geopolitical events affecting this company's operations
-- Weather/climate events impacting this company's infrastructure
-
-Markets:
-${marketsForFilter}
-
-Return JSON array of 1-indexed numbers (max 4), or []:`,
-          100,
+            const data = await res.json();
+            return (Array.isArray(data) ? data : []).map((m: any) => ({
+              id: m.id || m.condition_id,
+              question: m.question || m.title || "",
+              description: (m.description || "").slice(0, 300),
+              outcomePrices: m.outcomePrices || m.outcome_prices || [],
+              outcomes: m.outcomes || [],
+              volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
+              liquidity: Number(m.liquidity ?? m.liquidityNum ?? 0) || 0,
+              endDate: m.end_date_iso || m.endDate || "",
+              active: m.active ?? true,
+              slug: m.slug || m.market_slug || "",
+              url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com/search?query=${encodeURIComponent(term)}`,
+              _searchTerm: term,
+            }));
+          }),
         );
 
-        console.log(`[polymarket] ${symbol}: filter response: ${filterText}`);
+        const allMarkets = fetches
+          .filter((r): r is PromiseFulfilledResult<any[]> => r.status === "fulfilled")
+          .flatMap((r) => r.value)
+          .filter((m) => !!m?.question);
 
-        let finalResult: any;
-        try {
-          const indices = JSON.parse(filterText || "[]");
-          if (Array.isArray(indices) && indices.length > 0) {
-            const filtered = indices
-              .map((i: number) => unique[i - 1])
-              .filter(Boolean)
-              .slice(0, 4);
-            if (filtered.length > 0) {
-              finalResult = { 
-                markets: filtered, 
-                queries: searchTerms,
-                searchUrl: `https://polymarket.com/search?query=${encodeURIComponent(searchTerms[0] || symbol)}` 
-              };
-            }
-          }
-        } catch {}
+        const selected = pickTopRelevantMarkets(allMarkets, searchTerms, searchTerms, 4);
 
-        if (!finalResult) {
-          finalResult = { markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` };
-        }
+        const result = {
+          markets: selected,
+          queries: searchTerms.slice(0, 8),
+          searchUrl: `https://polymarket.com/search?query=${encodeURIComponent(searchTerms[0] || symbol)}`,
+        };
 
-        // Cache for 30 minutes
-        await setCache(cacheKey, finalResult, 30);
-        return jsonResponse(finalResult);
+        console.log(`[polymarket] ${symbol}: selected ${selected.length} markets from ${allMarkets.length} candidates`);
+
+        await setCache(cacheKey, result, 30);
+        return jsonResponse(result);
       } catch (e) {
-        return jsonResponse({ markets: [], queries: [], error: String(e), searchUrl: `https://polymarket.com` });
+        return jsonResponse({ markets: [], queries: [], error: String(e), searchUrl: "https://polymarket.com" });
       }
     }
 
