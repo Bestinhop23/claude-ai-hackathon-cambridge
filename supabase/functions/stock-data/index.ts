@@ -985,8 +985,11 @@ Return JSON:
         4000,
       );
 
-      const result = { analysis: parseJSON(text) };
-      await setCache(cacheKey, result, 120);
+      const parsed = parseJSON(text);
+      const result = { analysis: parsed };
+      if (parsed) {
+        await setCache(cacheKey, result, 120);
+      }
       return jsonResponse(result);
     }
 

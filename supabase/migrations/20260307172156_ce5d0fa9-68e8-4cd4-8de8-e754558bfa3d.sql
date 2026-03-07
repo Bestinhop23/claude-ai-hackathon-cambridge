@@ -1,0 +1,1 @@
+DELETE FROM api_cache WHERE cache_key = 'deep-analysis-PLTR-v1';
