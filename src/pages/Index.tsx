@@ -347,7 +347,8 @@ const PortfolioTab = () => {
 
 const Index = () => {
   const [tab, setTab] = useState<"data" | "insights" | "portfolio" | "map">("data");
-
+  // Prefetch insights data immediately so it's ready when user clicks the tab
+  const { data: insightsData, isLoading: insightsLoading } = useMarketInsights();
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
