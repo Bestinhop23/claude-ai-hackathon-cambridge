@@ -8,6 +8,7 @@ import {
   Crosshair, MapPin, Calendar, DollarSign, Briefcase, Phone, Bot,
 } from "lucide-react";
 import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary, useSecFilings } from "@/hooks/useStockData";
+import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import StockChart from "@/components/StockChart";
 import StockLogo from "@/components/StockLogo";
