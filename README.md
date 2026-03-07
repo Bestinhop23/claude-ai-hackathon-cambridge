@@ -1,73 +1,99 @@
-# Welcome to your Lovable project
+# FinTrack
 
-## Project info
+**FinTrack** is a Bloomberg Terminal for retail investors — a terminal-style web app that combines live market data, AI-driven analysis, portfolio tracking, prediction-market intelligence, and real-world operational signals in a single interface.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+The goal is to give everyday investors a smarter, more contextual way to understand markets.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## Overview
 
-**Use Lovable**
+FinTrack brings together multiple data layers that normally live across different tools and dashboards. Instead of just showing price charts, it combines **market data, AI insights, prediction markets, and real-world operational intelligence** to help investors understand what is happening behind the markets.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+On the home screen, users can navigate between:
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Data** – live stock data and market movers
+- **Insights** – AI-driven market analysis and stock ideas
+- **My Portfolio** – a demo portfolio dashboard
+- **Ops Map** – real-world operational intelligence affecting markets
 
-**Use your preferred IDE**
+Each stock also has a detailed research page with multiple views.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Stock Research Pages
 
-Follow these steps:
+Every ticker includes multiple tabs to explore the company from different angles:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- **Overview** – price data and quick company snapshot  
+- **Fundamentals** – financial metrics and company fundamentals  
+- **Deep Analysis** – AI-generated analysis and research insights  
+- **Polymarket** – prediction market signals related to the company  
+- **News** – latest news and sentiment signals  
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
+## What Makes FinTrack Different
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+FinTrack goes beyond a typical stock dashboard by layering **AI analysis and real-world signals** on top of traditional price data.
 
-**Edit a file directly in GitHub**
+The platform combines:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- Market price data
+- AI-generated insights
+- Sentiment and news analysis
+- Company research
+- Supply-chain and geopolitical risk signals
+- Prediction market intelligence
 
-**Use GitHub Codespaces**
+It also surfaces real-world operational signals such as:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- Flights
+- Ships
+- Severe weather
+- Satellite observations
 
-## What technologies are used for this project?
+These signals help provide additional context for market movements.
 
-This project is built with:
+---
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Data Sources
 
-## How can I deploy this project?
+FinTrack integrates several public data sources:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- **Yahoo Finance** – market price data
+- **Polymarket** – prediction market signals
+- **ADSB.lol** – flight tracking
+- **Digitraffic** – maritime traffic data
+- **NWS** – severe weather alerts
+- **Satellite feeds** – operational monitoring
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## Tech Stack
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+FinTrack is built with a modern frontend stack:
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- **React**
+- **TypeScript**
+- **Vite**
+- **Tailwind CSS**
+- **shadcn-ui**
+- **React Query**
+- **Recharts**
+- **Leaflet**
+- **Supabase**
+
+---
+
+## Vision
+
+FinTrack aims to bring **Bloomberg-style market intelligence tools to retail investors** by combining financial data, AI analysis, and real-world signals in one accessible interface.
+
+Instead of just watching prices move, investors can understand **why markets move**.
+
+---
+
+## One-Line Summary
+
+**FinTrack gives everyday investors a smarter market terminal by combining live market data, AI analysis, a portfolio dashboard, prediction-market signals, and real-world operational intelligence in a single interface.**
