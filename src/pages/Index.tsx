@@ -372,7 +372,7 @@ const Index = () => {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            {(tab === "data" || tab === "portfolio") && <CurrencySelector />}
+            <CurrencySelector />
             <ThemeToggle />
           </div>
         </div>
