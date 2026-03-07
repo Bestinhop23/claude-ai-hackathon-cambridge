@@ -1031,7 +1031,7 @@ Return JSON:
           "- Include at least one weather/climate query and one war/geopolitical query where relevant to this industry.",
         ].join("\n");
 
-        const generatedTermsText = await callAI(
+        const generatedTermsText = await callClaude(
           "You are a macro event query generator for equity analysis. Return ONLY valid JSON.",
           queryPrompt,
           260,
