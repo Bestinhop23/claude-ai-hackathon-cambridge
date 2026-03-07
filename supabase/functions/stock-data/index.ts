@@ -1161,7 +1161,7 @@ Return JSON:
         return jsonResponse({ summary: null });
       }
 
-      const text = await callAI(
+      const text = await callClaude(
         "You are a senior equity analyst who translates prediction market signals into actionable stock intelligence. Be specific about dollar amounts, percentages, and causal chains. Respond ONLY with valid JSON.",
         `Analyze how these prediction markets DIRECTLY impact ${symbol} (${name}, industry: ${industry}):
 
