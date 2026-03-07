@@ -458,6 +458,38 @@ export function useMarketInsights() {
   });
 }
 
+export function useGlobalNews() {
+  return useQuery({
+    queryKey: ["global-news"],
+    queryFn: async () => {
+      const data = await fetchStockData("global-news", {});
+      return { articles: data?.articles || [] };
+    },
+    staleTime: 300000,
+  });
+}
+
+export interface SecFiling {
+  form: string;
+  filingDate: string;
+  description: string;
+  url: string;
+  accessionNumber: string;
+  summary: string;
+}
+
+export function useSecFilings(symbol: string) {
+  return useQuery({
+    queryKey: ["sec-filings", symbol],
+    queryFn: async () => {
+      const data = await fetchStockData("sec-filings", { symbol });
+      return { filings: (data?.filings || []) as SecFiling[], cik: data?.cik || "" };
+    },
+    enabled: !!symbol,
+    staleTime: 600000,
+  });
+}
+
 export const TIME_RANGES = [
   { label: "1D", range: "1d", interval: "5m" },
   { label: "1W", range: "5d", interval: "30m" },

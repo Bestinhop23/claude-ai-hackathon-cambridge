@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Activity, BarChart3, Loader2, Briefcase, DollarSign } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Activity, BarChart3, Loader2, Briefcase, DollarSign, Newspaper } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
@@ -169,6 +170,7 @@ const PortfolioTab = () => {
 
 const Index = () => {
   const [tab, setTab] = useState<"data" | "portfolio">("data");
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
@@ -192,6 +194,13 @@ const Index = () => {
               </button>
             ))}
           </div>
+
+          <button
+            onClick={() => navigate("/news")}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-all"
+          >
+            <Newspaper className="h-4 w-4" />News
+          </button>
 
           <div className="ml-auto flex items-center gap-2">
             <CurrencySelector />

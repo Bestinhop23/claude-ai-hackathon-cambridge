@@ -7,7 +7,7 @@ import {
   ArrowUpRight, ArrowDownRight, Link2, Factory, Truck, Users,
   Crosshair, MapPin, Calendar, DollarSign, Briefcase, Phone, Bot,
 } from "lucide-react";
-import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary } from "@/hooks/useStockData";
+import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary, useSecFilings } from "@/hooks/useStockData";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import StockChart from "@/components/StockChart";
 import StockLogo from "@/components/StockLogo";
@@ -120,7 +120,7 @@ const StockDetail = () => {
   const { symbol = "" } = useParams();
   const upperSymbol = symbol.toUpperCase();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"overview" | "fundamentals" | "deep" | "news" | "polymarket">("overview");
+  const [tab, setTab] = useState<"overview" | "fundamentals" | "deep" | "news" | "polymarket" | "sec">("overview");
 
   const { data: quote, isLoading } = useQuote(upperSymbol);
   const { convert, symbol: currSym } = useCurrency();
@@ -133,6 +133,7 @@ const StockDetail = () => {
   const { data: polyData, isLoading: polyLoading } = usePolymarket(upperSymbol, quote?.shortName || quote?.longName, profileData?.profile);
   const { data: polySummary, isLoading: polySummaryLoading } = usePolymarketSummary(upperSymbol, quote?.shortName || quote?.longName, polyData?.markets || [], profileData?.profile);
   const { data: sentimentData, isLoading: sentimentLoading } = useSentiment(upperSymbol, articles);
+  const { data: secData, isLoading: secLoading } = useSecFilings(upperSymbol);
 
   const isPositive = (quote?.regularMarketChange ?? 0) >= 0;
   const [displayPrice, setDisplayPrice] = useState<number | null>(null);
@@ -348,6 +349,7 @@ const StockDetail = () => {
           <TabBtn active={tab === "fundamentals"} label="Fundamentals" icon={BarChart3} onClick={() => setTab("fundamentals")} />
           <TabBtn active={tab === "deep"} label="Deep Analysis" icon={Crosshair} onClick={() => setTab("deep")} />
           <TabBtn active={tab === "polymarket"} label="Polymarket" onClick={() => setTab("polymarket")} customIcon={<PolymarketLogo size={14} />} />
+          <TabBtn active={tab === "sec"} label="SEC Filings" icon={Building2} onClick={() => setTab("sec")} />
           <TabBtn active={tab === "news"} label="News" icon={Newspaper} onClick={() => setTab("news")} />
         </div>
 
@@ -797,6 +799,52 @@ const StockDetail = () => {
                   </a>
                 ))}</div>
               ) : <p className="text-[10px] text-muted-foreground">No news found</p>}
+            </Section>
+          </div>
+        )}
+
+        {/* ═══════ SEC FILINGS TAB ═══════ */}
+        {tab === "sec" && (
+          <div className="space-y-4">
+            <Section icon={Building2} title={`SEC Filings — ${upperSymbol}`} loading={secLoading} badge={<ClaudeBadge label="AI Summaries" />}>
+              {secData?.filings?.length ? (
+                <div className="space-y-3">
+                  {secData.filings.map((f: any, i: number) => (
+                    <a
+                      key={i}
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block bg-secondary/40 rounded-lg p-4 hover:bg-secondary/60 transition-colors border border-transparent hover:border-primary/20"
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-xs font-mono font-bold text-primary px-2 py-1 bg-primary/10 rounded">
+                          {f.form}
+                        </span>
+                        <span className="text-[11px] font-semibold text-foreground flex-1">
+                          {f.description}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {f.filingDate}
+                        </span>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                      </div>
+                      <p className="text-[10px] text-foreground/70 leading-relaxed border-l-2 pl-3" style={{ borderColor: CLAUDE_ORANGE }}>
+                        {f.summary}
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              ) : secLoading ? (
+                <div className="flex items-center gap-2 py-8 justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin" style={{ color: CLAUDE_ORANGE }} />
+                  <span className="text-xs text-muted-foreground">Fetching SEC filings from EDGAR…</span>
+                </div>
+              ) : (
+                <p className="text-[10px] text-muted-foreground text-center py-6">
+                  No SEC filings found for {upperSymbol}
+                </p>
+              )}
             </Section>
           </div>
         )}

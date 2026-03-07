@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import Index from "./pages/Index";
 import StockDetail from "./pages/StockDetail";
+import News from "./pages/News";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/stock/:symbol" element={<StockDetail />} />
+              <Route path="/news" element={<News />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -60,7 +60,7 @@ async function setCache(key: string, data: any, ttlMinutes: number): Promise<voi
 // ────────────────────────────────────────────────────────────
 
 async function callAI(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string | null> {
-  // Primary: Anthropic Claude (fast haiku model)
+  // Primary: Anthropic Claude
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (anthropicKey) {
     try {
@@ -118,6 +118,39 @@ async function callAI(systemPrompt: string, userPrompt: string, maxTokens = 1024
     }
   }
 
+  return null;
+}
+
+// Claude-only call (no fallback) for Polymarket
+async function callClaude(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string | null> {
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!anthropicKey) {
+    console.error("ANTHROPIC_API_KEY not set - Claude-only call failed");
+    return null;
+  }
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data?.content?.[0]?.text || null;
+    }
+    console.error("Claude error:", res.status, await res.text());
+  } catch (e) {
+    console.error("Claude call failed:", e);
+  }
   return null;
 }
 
@@ -998,7 +1031,7 @@ Return JSON:
           "- Include at least one weather/climate query and one war/geopolitical query where relevant to this industry.",
         ].join("\n");
 
-        const generatedTermsText = await callAI(
+        const generatedTermsText = await callClaude(
           "You are a macro event query generator for equity analysis. Return ONLY valid JSON.",
           queryPrompt,
           260,
@@ -1066,7 +1099,7 @@ Return JSON:
           shortlistText,
         ].join("\n");
 
-        const rankingText = await callAI(
+        const rankingText = await callClaude(
           "You are a strict equity relevance filter. Return ONLY valid JSON.",
           rankingPrompt,
           400,
@@ -1128,7 +1161,7 @@ Return JSON:
         return jsonResponse({ summary: null });
       }
 
-      const text = await callAI(
+      const text = await callClaude(
         "You are a senior equity analyst who translates prediction market signals into actionable stock intelligence. Be specific about dollar amounts, percentages, and causal chains. Respond ONLY with valid JSON.",
         `Analyze how these prediction markets DIRECTLY impact ${symbol} (${name}, industry: ${industry}):
 
@@ -1489,6 +1522,174 @@ Return JSON:
       } catch (e) {
         return jsonResponse({ winners: [], losers: [], markets: [], summary: "", error: String(e) });
       }
+    }
+
+    // ─── GLOBAL NEWS (top headlines + AI stock impact) ─────
+    if (action === "global-news") {
+      const cacheKey = "global-news-v1";
+      const cached = await getCached(cacheKey);
+      if (cached) return jsonResponse(cached);
+
+      const newsKey = Deno.env.get("NEWSAPI_KEY");
+      let articles: any[] = [];
+      if (newsKey) {
+        try {
+          const res = await fetch(`https://newsapi.org/v2/top-headlines?category=business&language=en&pageSize=20&apiKey=${newsKey}`);
+          if (res.ok) {
+            const data = await res.json();
+            articles = data?.articles || [];
+          }
+        } catch {}
+      }
+      if (articles.length === 0) {
+        articles = await fetchGoogleNewsRSS("global economy markets", 20);
+      }
+
+      // AI: generate stock impact for top articles
+      const headlinesList = articles.slice(0, 12).map((a: any, i: number) =>
+        `${i + 1}. "${a.title}" (${a.source?.name || "Unknown"})`
+      ).join("\n");
+
+      let impacts: any[] = [];
+      if (headlinesList) {
+        const text = await callAI(
+          "You are a senior macro equity strategist. For each news headline, identify 1-2 most impacted US-listed stocks with ticker symbols and explain the impact direction. Respond ONLY with valid JSON.",
+          `Analyze these business headlines and identify which US stocks are most impacted by each:\n\n${headlinesList}\n\nReturn JSON:\n[\n  {\n    "headlineIndex": 1,\n    "stocks": [\n      { "symbol": "TICKER", "name": "Company Name", "impact": "POSITIVE"|"NEGATIVE", "reason": "1 sentence why" }\n    ]\n  }\n]`,
+          2000,
+        );
+        const parsed = parseJSON(text);
+        if (Array.isArray(parsed)) impacts = parsed;
+      }
+
+      // Merge impacts into articles
+      const enriched = articles.slice(0, 12).map((a: any, i: number) => {
+        const impact = impacts.find((im: any) => im.headlineIndex === i + 1);
+        return { ...a, stockImpact: impact?.stocks || [] };
+      });
+
+      const result = { articles: enriched };
+      await setCache(cacheKey, result, 15);
+      return jsonResponse(result);
+    }
+
+    // ─── SEC FILINGS (EDGAR + AI summaries) ─────────────────
+    if (action === "sec-filings") {
+      const { symbol } = params;
+      const cacheKey = `sec-filings-${symbol}-v1`;
+      const cached = await getCached(cacheKey);
+      if (cached) return jsonResponse(cached);
+
+      // 1. Get CIK from SEC
+      let cik = "";
+      try {
+        const res = await fetch(`https://efts.sec.gov/LATEST/search-index?q=%22${symbol}%22&dateRange=custom&startdt=2020-01-01&forms=10-K,10-Q,8-K`, {
+          headers: { "User-Agent": "FinTrack support@fintrack.app", Accept: "application/json" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const hits = data?.hits?.hits || [];
+          if (hits.length > 0) {
+            cik = hits[0]?._source?.file_num?.replace(/-/g, "") || "";
+          }
+        }
+      } catch {}
+
+      // Try ticker-to-CIK mapping
+      if (!cik) {
+        try {
+          const res = await fetch("https://www.sec.gov/files/company_tickers.json", {
+            headers: { "User-Agent": "FinTrack support@fintrack.app" },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            for (const key of Object.keys(data)) {
+              if (data[key]?.ticker?.toUpperCase() === symbol.toUpperCase()) {
+                cik = String(data[key].cik_str);
+                break;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      let filings: any[] = [];
+      if (cik) {
+        const paddedCik = cik.padStart(10, "0");
+        try {
+          const res = await fetch(`https://data.sec.gov/submissions/CIK${paddedCik}.json`, {
+            headers: { "User-Agent": "FinTrack support@fintrack.app", Accept: "application/json" },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const recent = data?.filings?.recent || {};
+            const forms = recent.form || [];
+            const dates = recent.filingDate || [];
+            const accessions = recent.accessionNumber || [];
+            const descriptions = recent.primaryDocDescription || [];
+            const docs = recent.primaryDocument || [];
+
+            for (let i = 0; i < Math.min(forms.length, 10); i++) {
+              const form = forms[i];
+              if (["10-K", "10-Q", "8-K", "S-1", "DEF 14A", "20-F", "6-K"].includes(form)) {
+                const accNum = accessions[i]?.replace(/-/g, "");
+                filings.push({
+                  form,
+                  filingDate: dates[i],
+                  description: descriptions[i] || form,
+                  url: `https://www.sec.gov/Archives/edgar/data/${cik}/${accNum}/${docs[i]}`,
+                  accessionNumber: accessions[i],
+                });
+              }
+              if (filings.length >= 10) break;
+            }
+          }
+        } catch {}
+      }
+
+      // If no filings found, try EDGAR full-text search as fallback
+      if (filings.length === 0) {
+        try {
+          const res = await fetch(`https://efts.sec.gov/LATEST/search-index?q=%22${symbol}%22&forms=10-K,10-Q,8-K&dateRange=custom&startdt=2023-01-01`, {
+            headers: { "User-Agent": "FinTrack support@fintrack.app", Accept: "application/json" },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const hits = data?.hits?.hits || [];
+            filings = hits.slice(0, 10).map((h: any) => ({
+              form: h._source?.form_type || "Unknown",
+              filingDate: h._source?.file_date || "",
+              description: h._source?.display_names?.[0] || h._source?.form_type || "",
+              url: `https://www.sec.gov/Archives/edgar/data/${h._source?.entity_id || ""}/${(h._source?.file_num || "").replace(/-/g, "")}`,
+              accessionNumber: h._id || "",
+            }));
+          }
+        } catch {}
+      }
+
+      // AI summaries for filings
+      let summaries: string[] = [];
+      if (filings.length > 0) {
+        const filingsList = filings.map((f: any, i: number) =>
+          `${i + 1}. ${f.form} filed ${f.filingDate}: ${f.description}`
+        ).join("\n");
+
+        const text = await callAI(
+          "You are an SEC filing analyst. For each filing, provide a concise 1-2 sentence summary of what the filing likely contains and its significance for investors. Respond ONLY with valid JSON.",
+          `Stock: ${symbol}\n\nFilings:\n${filingsList}\n\nReturn JSON array of strings with one summary per filing:\n["summary1", "summary2", ...]`,
+          1500,
+        );
+        const parsed = parseJSON(text);
+        if (Array.isArray(parsed)) summaries = parsed;
+      }
+
+      const enrichedFilings = filings.map((f: any, i: number) => ({
+        ...f,
+        summary: summaries[i] || "Summary not available",
+      }));
+
+      const result = { filings: enrichedFilings, cik };
+      await setCache(cacheKey, result, 60);
+      return jsonResponse(result);
     }
 
     // ─── SATELLITES ──────────────────────────────────────────
