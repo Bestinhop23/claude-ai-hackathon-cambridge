@@ -1315,9 +1315,15 @@ Return JSON:
           .filter((r): r is PromiseFulfilledResult<any[]> => r.status === "fulfilled")
           .flatMap((r) => r.value);
 
-        const curated = pickTopRelevantMarkets(allMarkets, searchQueries, searchQueries, 12)
+        let curated = pickTopRelevantMarkets(allMarkets, searchQueries, searchQueries, 12)
           .filter((m) => POLY_MACRO_REGEX.test(`${m.question || ""} ${m.description || ""}`))
           .slice(0, 10);
+
+        if (curated.length === 0) {
+          curated = pickTopRelevantMarkets(allMarkets, searchQueries, searchQueries, 10)
+            .filter((m) => !isNoiseMarket(m))
+            .slice(0, 10);
+        }
 
         const { winners, losers } = buildHeuristicInsights(curated);
 
