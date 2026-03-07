@@ -60,7 +60,7 @@ async function setCache(key: string, data: any, ttlMinutes: number): Promise<voi
 // ────────────────────────────────────────────────────────────
 
 async function callAI(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string | null> {
-  // Primary: Anthropic Claude (fast haiku model)
+  // Primary: Anthropic Claude
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (anthropicKey) {
     try {
@@ -118,6 +118,39 @@ async function callAI(systemPrompt: string, userPrompt: string, maxTokens = 1024
     }
   }
 
+  return null;
+}
+
+// Claude-only call (no fallback) for Polymarket
+async function callClaude(systemPrompt: string, userPrompt: string, maxTokens = 1024): Promise<string | null> {
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!anthropicKey) {
+    console.error("ANTHROPIC_API_KEY not set - Claude-only call failed");
+    return null;
+  }
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data?.content?.[0]?.text || null;
+    }
+    console.error("Claude error:", res.status, await res.text());
+  } catch (e) {
+    console.error("Claude call failed:", e);
+  }
   return null;
 }
 
