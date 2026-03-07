@@ -1099,7 +1099,7 @@ Return JSON:
           shortlistText,
         ].join("\n");
 
-        const rankingText = await callAI(
+        const rankingText = await callClaude(
           "You are a strict equity relevance filter. Return ONLY valid JSON.",
           rankingPrompt,
           400,
