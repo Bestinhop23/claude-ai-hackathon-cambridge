@@ -1,192 +1,14 @@
-import { lazy, Suspense, useState } from "react";
-import { Activity, Globe, BarChart3, Loader2, Target, TrendingUp, TrendingDown, ExternalLink, Sparkles, Briefcase, DollarSign } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
+import { useState } from "react";
+import { Activity, BarChart3, Loader2, Briefcase, DollarSign } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import MarketOverview from "@/components/MarketOverview";
 import StockLogo from "@/components/StockLogo";
-import { useMarketInsights, useMultiQuote, type YahooQuote } from "@/hooks/useStockData";
+import { useMultiQuote, type YahooQuote } from "@/hooks/useStockData";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
-const GlobeView = lazy(() => import("@/components/GlobeView"));
-
-const CLAUDE_ORANGE = "#D97757";
-const ClaudeBadge = () => (
-  <span className="inline-flex items-center gap-1 text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: `${CLAUDE_ORANGE}15`, color: CLAUDE_ORANGE, border: `1px solid ${CLAUDE_ORANGE}30` }}>
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill={CLAUDE_ORANGE}/><path d="M16.5 8.5L12 16L7.5 8.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-    Claude AI
-  </span>
-);
-
-const PolymarketLogo = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <circle cx="12" cy="12" r="12" fill="#0052FF"/>
-    <text x="12" y="17" textAnchor="middle" fontSize="14" fontWeight="bold" fill="white">P</text>
-  </svg>
-);
-
-function parsePolyPrices(raw: any): number[] {
-  if (!raw) return [];
-  let arr = raw;
-  if (typeof raw === "string") { try { arr = JSON.parse(raw); } catch { return []; } }
-  if (!Array.isArray(arr)) return [];
-  return arr.map((v: any) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; });
-}
-
-const InsightsTab = ({ prefetchedData, prefetchLoading }: { prefetchedData?: any; prefetchLoading?: boolean }) => {
-  const data = prefetchedData;
-  const isLoading = prefetchLoading;
-  const winners = data?.winners || [];
-  const losers = data?.losers || [];
-  const markets = data?.markets || [];
-  const summary = data?.summary || "";
-
-  // Prepare chart data for market probabilities
-  const marketChartData = markets.slice(0, 8).map((m: any) => {
-    const prices = parsePolyPrices(m.outcomePrices);
-    const yesPct = prices[0] ? prices[0] * 100 : 0;
-    return {
-      name: (m.question || "").length > 40 ? (m.question || "").slice(0, 37) + "…" : m.question,
-      probability: Math.round(yesPct),
-      volume: (m.volume || 0) / 1000,
-    };
-  });
-
-  if (isLoading) return (
-    <div className="flex items-center justify-center py-20 gap-3">
-      <Loader2 className="h-6 w-6 animate-spin" style={{ color: CLAUDE_ORANGE }} />
-      <span className="text-sm text-muted-foreground">Claude is analyzing prediction markets for stock signals…</span>
-    </div>
-  );
-
-  return (
-    <div className="space-y-6">
-      {summary && (
-        <div className="bg-card border border-border rounded-lg p-4 flex items-start gap-3" style={{ borderLeftWidth: 3, borderLeftColor: CLAUDE_ORANGE }}>
-          <Sparkles className="h-5 w-5 shrink-0 mt-0.5" style={{ color: CLAUDE_ORANGE }} />
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-sm font-bold text-foreground">Prediction Market Intelligence</h3>
-              <ClaudeBadge />
-            </div>
-            <p className="text-xs text-foreground/80 leading-relaxed">{summary}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Probability bar chart */}
-      {marketChartData.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <PolymarketLogo size={16} />
-            <h3 className="text-sm font-bold text-foreground">Live Market Probabilities</h3>
-            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-[#0052FF]/10 text-[#0052FF] border border-[#0052FF]/30">Live Data</span>
-          </div>
-          <ResponsiveContainer width="100%" height={Math.max(200, marketChartData.length * 40)}>
-            <BarChart data={marketChartData} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 5 }}>
-              <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10 }} />
-              <YAxis type="category" dataKey="name" width={200} tick={{ fontSize: 9 }} />
-              <Tooltip formatter={(v: number) => [`${v}%`, "Probability"]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-              <Bar dataKey="probability" radius={[0, 4, 4, 0]}>
-                {marketChartData.map((entry, index) => (
-                  <Cell key={index} fill={entry.probability > 60 ? "hsl(var(--stock-up))" : entry.probability > 40 ? "hsl(var(--primary))" : "hsl(var(--stock-down))"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Winners */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-stock-up/5">
-            <TrendingUp className="h-4 w-4 text-stock-up" />
-            <h3 className="text-sm font-bold text-foreground">Potential Winners</h3>
-            <ClaudeBadge />
-          </div>
-          <div className="divide-y divide-border">
-            {winners.map((w, i) => (
-              <a key={i} href={`/stock/${w.symbol}`} className="block px-4 py-3 hover:bg-secondary/40 transition-colors">
-                <div className="flex items-center gap-2 mb-1">
-                  <StockLogo symbol={w.symbol} size={20} />
-                  <span className="font-mono text-sm font-bold text-stock-up">{w.symbol}</span>
-                  <span className="text-xs text-foreground">{w.name}</span>
-                  {w.impliedProbability && <span className="text-[9px] font-mono text-primary ml-auto">{w.impliedProbability}</span>}
-                </div>
-                <p className="text-[11px] text-foreground/70 mb-1">{w.thesis}</p>
-                {w.relevantMarket && <p className="text-[9px] text-muted-foreground mt-0.5 flex items-center gap-1"><Target className="h-2.5 w-2.5" />{w.relevantMarket}</p>}
-              </a>
-            ))}
-            {winners.length === 0 && <p className="text-xs text-muted-foreground p-4">No signals</p>}
-          </div>
-        </div>
-
-        {/* Losers */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-stock-down/5">
-            <TrendingDown className="h-4 w-4 text-stock-down" />
-            <h3 className="text-sm font-bold text-foreground">Potential Losers</h3>
-            <ClaudeBadge />
-          </div>
-          <div className="divide-y divide-border">
-            {losers.map((l, i) => (
-              <a key={i} href={`/stock/${l.symbol}`} className="block px-4 py-3 hover:bg-secondary/40 transition-colors">
-                <div className="flex items-center gap-2 mb-1">
-                  <StockLogo symbol={l.symbol} size={20} />
-                  <span className="font-mono text-sm font-bold text-stock-down">{l.symbol}</span>
-                  <span className="text-xs text-foreground">{l.name}</span>
-                  {l.impliedProbability && <span className="text-[9px] font-mono text-primary ml-auto">{l.impliedProbability}</span>}
-                </div>
-                <p className="text-[11px] text-foreground/70 mb-1">{l.thesis}</p>
-                {l.relevantMarket && <p className="text-[9px] text-muted-foreground mt-0.5 flex items-center gap-1"><Target className="h-2.5 w-2.5" />{l.relevantMarket}</p>}
-              </a>
-            ))}
-            {losers.length === 0 && <p className="text-xs text-muted-foreground p-4">No signals</p>}
-          </div>
-        </div>
-      </div>
-
-      {/* Live Polymarket feeds */}
-      {markets.length > 0 && (
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-secondary/30">
-            <PolymarketLogo size={16} />
-            <h3 className="text-sm font-bold text-foreground">Live Prediction Markets</h3>
-            <a href="https://polymarket.com" target="_blank" rel="noopener noreferrer" className="ml-auto text-[9px] text-[#0052FF] hover:underline flex items-center gap-1"><ExternalLink className="h-3 w-3" />Polymarket</a>
-          </div>
-          <div className="divide-y divide-border">
-            {markets.map((m: any, i: number) => {
-              const prices = parsePolyPrices(m.outcomePrices);
-              const yesPct = prices[0] != null ? prices[0] * 100 : 0;
-              const noPct = prices[1] != null ? prices[1] * 100 : 100 - yesPct;
-              return (
-                <a key={i} href={m.url} target="_blank" rel="noopener noreferrer" className="block px-4 py-3 hover:bg-secondary/40 transition-colors">
-                  <div className="flex items-center gap-3 mb-1.5">
-                    <span className="text-[11px] text-foreground flex-1 font-medium">{m.question}</span>
-                    {m.volume > 0 && <span className="text-[9px] text-muted-foreground">${m.volume > 1e6 ? `${(m.volume / 1e6).toFixed(1)}M` : `${(m.volume / 1e3).toFixed(0)}K`}</span>}
-                    <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-4 rounded-full overflow-hidden flex bg-secondary">
-                      <div className="h-full flex items-center justify-center text-[8px] font-bold text-white" style={{ width: `${Math.max(yesPct, 8)}%`, background: "hsl(var(--stock-up))" }}>
-                        {yesPct >= 12 && `${yesPct.toFixed(0)}%`}
-                      </div>
-                      <div className="h-full flex items-center justify-center text-[8px] font-bold text-white" style={{ width: `${Math.max(noPct, 8)}%`, background: "hsl(var(--stock-down))" }}>
-                        {noPct >= 12 && `${noPct.toFixed(0)}%`}
-                      </div>
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 /* ── Portfolio Tab ─────────────────────────────────────── */
 const PORTFOLIO_HOLDINGS = [
   { symbol: "AAPL", shares: 30, avgCost: 178.50, allocation: 12 },
@@ -346,9 +168,7 @@ const PortfolioTab = () => {
 };
 
 const Index = () => {
-  const [tab, setTab] = useState<"data" | "insights" | "portfolio" | "map">("data");
-  // Prefetch insights data immediately so it's ready when user clicks the tab
-  const { data: insightsData, isLoading: insightsLoading } = useMarketInsights();
+  const [tab, setTab] = useState<"data" | "portfolio">("data");
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
@@ -362,9 +182,7 @@ const Index = () => {
           <div className="ml-4 flex items-center gap-1 rounded-lg bg-muted p-1">
             {[
               { key: "data" as const, label: "Data", icon: BarChart3 },
-              { key: "insights" as const, label: "Insights", icon: Target },
               { key: "portfolio" as const, label: "My Portfolio", icon: Briefcase },
-              { key: "map" as const, label: "Ops Map", icon: Globe },
             ].map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
@@ -376,7 +194,7 @@ const Index = () => {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            {(tab === "data" || tab === "portfolio") && <CurrencySelector />}
+            <CurrencySelector />
             <ThemeToggle />
           </div>
         </div>
@@ -384,22 +202,14 @@ const Index = () => {
 
       <main className="container mx-auto px-4 py-4">
         {tab === "data" && <MarketOverview />}
-        {tab === "insights" && <InsightsTab prefetchedData={insightsData} prefetchLoading={insightsLoading} />}
         {tab === "portfolio" && <PortfolioTab />}
-        {tab === "map" && (
-          <Suspense fallback={<div className="flex h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
-            <GlobeView />
-          </Suspense>
-        )}
       </main>
 
       <footer className="mt-8 border-t border-border py-6">
         <div className="container mx-auto px-4 text-center text-xs text-muted-foreground">
           <p>
             {tab === "data" ? "Market data provided by Yahoo Finance. Prices may be delayed." :
-             tab === "insights" ? "Prediction market data via Polymarket. AI analysis powered by Claude." :
-             tab === "portfolio" ? "Simulated portfolio for demonstration. Not financial advice." :
-             "Ops map data via ADSB.lol · Digitraffic · NWS · Satellite feeds."}
+             "Simulated portfolio for demonstration. Not financial advice."}
           </p>
         </div>
       </footer>
