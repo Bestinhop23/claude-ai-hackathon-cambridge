@@ -41,6 +41,21 @@ const News = () => {
             <span className="text-lg font-bold tracking-tight text-foreground">FinTrack</span>
           </div>
           <StockSearch />
+
+          <div className="ml-4 flex items-center gap-1 rounded-lg bg-muted p-1">
+            <button
+              onClick={() => navigate("/")}
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-all"
+            >
+              <BarChart3 className="h-4 w-4" />Data
+            </button>
+            <button
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium bg-background text-foreground shadow-sm transition-all"
+            >
+              <Newspaper className="h-4 w-4" />News
+            </button>
+          </div>
+
           <div className="ml-auto flex items-center gap-2">
             <CurrencySelector />
             <ThemeToggle />
