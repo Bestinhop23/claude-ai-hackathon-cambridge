@@ -131,8 +131,8 @@ const StockDetail = () => {
   const { data: deepData, isLoading: deepLoading } = useDeepAnalysis(tab === "deep" ? upperSymbol : "", quote?.shortName || quote?.longName, profileData?.profile);
   const { data: articles = [], isLoading: newsLoading } = useNews(upperSymbol, quote?.shortName || quote?.longName);
   const { data: relevantData, isLoading: relevantLoading } = useRelevantNews(upperSymbol, quote?.shortName || quote?.longName);
-  const { data: polyData, isLoading: polyLoading } = usePolymarket(upperSymbol, quote?.shortName || quote?.longName, profileData?.profile);
-  const { data: polySummary, isLoading: polySummaryLoading } = usePolymarketSummary(upperSymbol, quote?.shortName || quote?.longName, polyData?.markets || [], profileData?.profile);
+  const { data: polyData, isLoading: polyLoading } = usePolymarket(tab === "polymarket" ? upperSymbol : "", quote?.shortName || quote?.longName, profileData?.profile);
+  const { data: polySummary, isLoading: polySummaryLoading } = usePolymarketSummary(tab === "polymarket" ? upperSymbol : "", quote?.shortName || quote?.longName, polyData?.markets || [], profileData?.profile);
   const { data: sentimentData, isLoading: sentimentLoading } = useSentiment(upperSymbol, articles);
   const { data: secData, isLoading: secLoading } = useSecFilings(upperSymbol);
 
