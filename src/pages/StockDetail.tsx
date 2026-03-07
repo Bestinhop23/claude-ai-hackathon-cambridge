@@ -128,7 +128,7 @@ const StockDetail = () => {
   const { data: profileData, isLoading: profileLoading } = useCompanyProfile(upperSymbol);
   const { data: earnings, isLoading: earningsLoading } = useEarnings(upperSymbol);
   const { data: analysisData, isLoading: analysisLoading } = useAnalysis(upperSymbol, quote?.shortName || quote?.longName);
-  const { data: deepData, isLoading: deepLoading } = useDeepAnalysis(tab === "deep" ? upperSymbol : "", quote?.shortName || quote?.longName, profileData?.profile);
+  const { data: deepData, isLoading: deepLoading } = useDeepAnalysis((tab === "deep" || tab === "overview") ? upperSymbol : "", quote?.shortName || quote?.longName, profileData?.profile);
   const { data: articles = [], isLoading: newsLoading } = useNews(upperSymbol, quote?.shortName || quote?.longName);
   const { data: relevantData, isLoading: relevantLoading } = useRelevantNews(upperSymbol, quote?.shortName || quote?.longName);
   const { data: polyData, isLoading: polyLoading } = usePolymarket(tab === "polymarket" ? upperSymbol : "", quote?.shortName || quote?.longName, profileData?.profile);
