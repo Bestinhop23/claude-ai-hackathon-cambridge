@@ -1021,7 +1021,12 @@ Return JSON:
           .flatMap((r) => r.value)
           .filter((m) => !!m?.question);
 
-        const selected = pickTopRelevantMarkets(allMarkets, searchTerms, searchTerms, 4);
+        const selectedBase = pickTopRelevantMarkets(allMarkets, searchTerms, searchTerms, 6);
+        const matchTokens = Array.from(new Set(searchTerms.flatMap((t) => t.toLowerCase().split(/\s+/).filter((w) => w.length >= 4))));
+        const selected = selectedBase.filter((m) => {
+          const text = `${m?.question || ""} ${m?.description || ""}`.toLowerCase();
+          return matchTokens.some((token) => text.includes(token));
+        }).slice(0, 4);
 
         const result = {
           markets: selected,
