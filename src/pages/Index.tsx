@@ -1,15 +1,13 @@
-import { lazy, Suspense, useState } from "react";
-import { Activity, Globe, BarChart3, Loader2, Target, TrendingUp, TrendingDown, ExternalLink, Sparkles, Briefcase, DollarSign } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
+import { useState } from "react";
+import { Activity, BarChart3, Loader2, TrendingUp, TrendingDown, ExternalLink, Sparkles, Briefcase, DollarSign } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import MarketOverview from "@/components/MarketOverview";
 import StockLogo from "@/components/StockLogo";
-import { useMarketInsights, useMultiQuote, type YahooQuote } from "@/hooks/useStockData";
+import { useMultiQuote, type YahooQuote } from "@/hooks/useStockData";
 import { useCurrency } from "@/contexts/CurrencyContext";
-
-const GlobeView = lazy(() => import("@/components/GlobeView"));
 
 const CLAUDE_ORANGE = "#D97757";
 const ClaudeBadge = () => (
