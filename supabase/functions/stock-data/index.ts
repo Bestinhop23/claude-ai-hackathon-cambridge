@@ -1392,9 +1392,21 @@ Return JSON:
           return `${i + 1}. ${m.question} | YES=${yes} | Vol=$${Math.round((m.volume || 0) / 1000)}K`;
         }).join("\n");
 
+        const selectPrompt = [
+          "Choose the 8-10 most globally relevant macro/geopolitical prediction markets for broad US stock impact.",
+          "",
+          "Reject sports, entertainment, celebrity, and local election races.",
+          "",
+          "Return JSON:",
+          '{ "indices": [1,2,3], "summary": "one short sentence" }',
+          "",
+          "Markets:",
+          candidateListText,
+        ].join("\n");
+
         const selectText = await callAI(
           "You are a strict macro relevance ranker for equities. Return ONLY valid JSON.",
-          `Choose the 8-10 most globally relevant macro/geopolitical prediction markets for broad US stock impact.\n\nReject sports, entertainment, celebrity, and local election races.\n\nReturn JSON:\n{ "indices": [1,2,3], "summary": "one short sentence" }\n\nMarkets:\n${candidateListText}`,
+          selectPrompt,
           350,
         );
 
@@ -1415,9 +1427,24 @@ Return JSON:
           return `${i + 1}. "${m.question}" (YES ${yes}, Vol $${Math.round((m.volume || 0) / 1000)}K)`;
         }).join("\n");
 
+        const insightsPrompt = [
+          "Using these LIVE prediction markets, identify equity winners and losers with causal links.",
+          "",
+          summaryInput,
+          "",
+          "Return JSON:",
+          "{",
+          '  "winners": [{ "symbol": "...", "name": "...", "thesis": "1-2 sentences with causal chain", "relevantMarket": "exact market", "impliedProbability": "YES %" }],',
+          '  "losers": [{ "symbol": "...", "name": "...", "thesis": "1-2 sentences with causal chain", "relevantMarket": "exact market", "impliedProbability": "YES %" }],',
+          '  "summary": "2-3 sentence macro narrative"',
+          "}",
+          "",
+          "Provide 3-5 winners and 3-5 losers. Keep it specific and practical.",
+        ].join("\n");
+
         const insightsText = await callAI(
           "You are a top-down macro equity strategist. Return ONLY valid JSON.",
-          `Using these LIVE prediction markets, identify equity winners and losers with causal links.\n\n${summaryInput}\n\nReturn JSON:\n{\n  "winners": [{ "symbol": "...", "name": "...", "thesis": "1-2 sentences with causal chain", "relevantMarket": "exact market", "impliedProbability": "YES %" }],\n  "losers": [{ "symbol": "...", "name": "...", "thesis": "1-2 sentences with causal chain", "relevantMarket": "exact market", "impliedProbability": "YES %" }],\n  "summary": "2-3 sentence macro narrative"\n}\n\nProvide 3-5 winners and 3-5 losers. Keep it specific and practical.`,
+          insightsPrompt,
           1900,
         );
 
@@ -1428,9 +1455,19 @@ Return JSON:
 
         // Retry once with a tighter schema if Claude returns empty structure
         if (winners.length === 0 && losers.length === 0) {
+          const retryPrompt = [
+            "From these prediction markets:",
+            summaryInput,
+            "",
+            "Return JSON with exactly this shape:",
+            '{ "winners": [{"symbol":"","name":"","thesis":"","relevantMarket":"","impliedProbability":""}], "losers": [{"symbol":"","name":"","thesis":"","relevantMarket":"","impliedProbability":""}], "summary": "" }',
+            "",
+            "Provide at least 2 winners and 2 losers.",
+          ].join("\n");
+
           const retryText = await callAI(
             "Return ONLY valid JSON and include non-empty arrays.",
-            `From these prediction markets:\n${summaryInput}\n\nReturn JSON with exactly this shape:\n{ "winners": [{"symbol":"","name":"","thesis":"","relevantMarket":"","impliedProbability":""}], "losers": [{"symbol":"","name":"","thesis":"","relevantMarket":"","impliedProbability":""}], "summary": "" }\n\nProvide at least 2 winners and 2 losers.",
+            retryPrompt,
             1200,
           );
           parsed = parseJSON(retryText);
