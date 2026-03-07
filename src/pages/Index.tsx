@@ -384,7 +384,7 @@ const Index = () => {
 
       <main className="container mx-auto px-4 py-4">
         {tab === "data" && <MarketOverview />}
-        {tab === "insights" && <InsightsTab />}
+        {tab === "insights" && <InsightsTab prefetchedData={insightsData} prefetchLoading={insightsLoading} />}
         {tab === "portfolio" && <PortfolioTab />}
         {tab === "map" && (
           <Suspense fallback={<div className="flex h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
