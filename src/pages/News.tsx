@@ -1,4 +1,4 @@
-import { Activity, Newspaper, Loader2, ExternalLink, TrendingUp, TrendingDown } from "lucide-react";
+import { Activity, Newspaper, Loader2, ExternalLink, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGlobalNews } from "@/hooks/useStockData";
 import ThemeToggle from "@/components/ThemeToggle";
