@@ -972,7 +972,7 @@ Return JSON:
           "auto": ["ev", "tariff", "interest rate", "oil price"],
         };
 
-        const defaultMacroTerms = ["tariff", "recession", "interest rate", "inflation", "oil price", "war", "sanctions", "china trade"];
+        const defaultMacroTerms = ["tariff", "recession", "interest rate", "inflation", "oil price", "sanctions", "china trade", "export controls"];
         let searchTerms: string[] = [];
 
         const loweredIndustry = industry.toLowerCase();
