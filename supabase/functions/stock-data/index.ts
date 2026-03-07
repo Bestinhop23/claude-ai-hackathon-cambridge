@@ -765,50 +765,75 @@ Return JSON:
       return jsonResponse({ analysis: parseJSON(text) });
     }
 
-    // ─── POLYMARKET (Real prediction market data) ────────────
+    // ─── POLYMARKET (Real prediction market data) — cached 30min per stock ──
     if (action === "polymarket") {
       const { symbol, companyName, profile } = params;
       const name = companyName || symbol;
       const industry = profile?.finnhubIndustry || "";
       const weburl = profile?.weburl || "";
       
+      const cacheKey = `polymarket-${symbol}-v2`;
+      const cached = await getCached(cacheKey);
+      if (cached) {
+        console.log(`[polymarket] ${symbol}: returning cached result`);
+        return jsonResponse(cached);
+      }
+
       try {
-        // Step 1: AI generates VERY specific search terms tied to the company's actual operations
-        const searchTermsText = await callAI(
-          "You generate search queries for Polymarket prediction markets. Return ONLY a JSON array of 3-5 strings. NO explanation.",
-          `Company: ${symbol} (${name})
-Industry: ${industry}
-Website: ${weburl}
+        // Step 1: Claude generates VERY specific, granular search terms
+        // Use a detailed industry map to avoid generic searches
+        const industryMap: Record<string, string[]> = {
+          "air freight": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "supply chain"],
+          "trucking": ["tariff", "oil price", "diesel", "recession", "highway"],
+          "logistics": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "supply chain"],
+          "transportation": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel"],
+          "defense": ["war", "NATO", "defense spending", "Iran", "military"],
+          "aerospace": ["war", "NATO", "defense spending", "Boeing", "FAA"],
+          "pharma": ["FDA", "drug pricing", "Medicare", "patent"],
+          "biotech": ["FDA approval", "clinical trial", "drug pricing"],
+          "technology": ["AI regulation", "antitrust", "data privacy", "semiconductor"],
+          "software": ["AI regulation", "antitrust", "data privacy", "cybersecurity"],
+          "semiconductor": ["chip export", "TSMC", "China semiconductor", "AI chip"],
+          "banking": ["interest rate", "recession", "bank regulation", "credit"],
+          "financial": ["interest rate", "recession", "regulation", "credit"],
+          "insurance": ["hurricane", "wildfire", "climate", "interest rate"],
+          "oil": ["oil price", "OPEC", "sanctions", "pipeline", "natural gas"],
+          "energy": ["oil price", "renewable energy", "nuclear", "natural gas"],
+          "mining": ["commodity price", "China demand", "lithium", "copper"],
+          "retail": ["consumer spending", "recession", "tariff", "inflation"],
+          "auto": ["EV", "tariff", "interest rate", "oil price"],
+          "food": ["commodity price", "drought", "food safety", "tariff"],
+          "media": ["streaming", "advertising", "TikTok", "regulation"],
+          "telecom": ["spectrum", "5G", "regulation", "net neutrality"],
+          "real estate": ["interest rate", "housing market", "recession"],
+          "healthcare": ["Medicare", "drug pricing", "FDA", "regulation"],
+        };
 
-I need Polymarket search queries that find prediction markets whose outcomes would DIRECTLY and MATERIALLY impact this specific company's stock price.
-
-CRITICAL RULES:
-- DO NOT search for the company name or ticker — Polymarket has no markets about individual stocks
-- DO NOT use generic terms like "economy" or "market" — be SPECIFIC
-- Think about what SPECIFIC external events would move this stock ±5% or more
-
-For a LOGISTICS company (like UPS/FedEx): search "oil price", "tariff China", "hurricane", "trade war", "diesel fuel"
-For a DEFENSE company (like RTX/LMT): search "Ukraine war", "NATO", "defense spending", "Iran"
-For a PHARMA company (like PFE/MRK): search "FDA approval", "drug pricing", "Medicare"
-For a TECH company (like MSFT/GOOG): search "AI regulation", "antitrust", "TikTok ban"
-For a BANK (like JPM/GS): search "interest rate", "recession", "bank regulation"
-
-Now generate 3-5 search terms for ${symbol} (${name}, ${industry}):`,
-          200,
-        );
-
+        // Find matching industry terms
         let searchTerms: string[] = [];
-        try {
-          const parsed = JSON.parse(searchTermsText || "[]");
-          searchTerms = Array.isArray(parsed) ? parsed.slice(0, 5) : [];
-        } catch {
-          // Industry-specific fallback
-          if (industry.toLowerCase().includes("transport") || industry.toLowerCase().includes("logist")) {
-            searchTerms = ["tariff", "oil price", "hurricane", "trade war"];
-          } else if (industry.toLowerCase().includes("defense") || industry.toLowerCase().includes("aero")) {
-            searchTerms = ["war", "NATO", "defense spending"];
-          } else {
-            searchTerms = ["tariff", "recession", "interest rate"];
+        const industryLower = industry.toLowerCase();
+        for (const [key, terms] of Object.entries(industryMap)) {
+          if (industryLower.includes(key)) {
+            searchTerms = terms;
+            break;
+          }
+        }
+
+        // If no match, ask Claude
+        if (searchTerms.length === 0) {
+          const searchTermsText = await callAI(
+            "Return ONLY a JSON array of 4-6 strings. NO explanation.",
+            `Company: ${symbol} (${name}), Industry: ${industry}
+Generate Polymarket search terms for events that would move this stock ±5%.
+DO NOT search for the company name. Search for EXTERNAL events (tariffs, wars, regulations, commodity prices, weather, etc).
+Examples: "oil price", "tariff China", "hurricane", "interest rate", "FDA approval"`,
+            150,
+          );
+          try {
+            const parsed = JSON.parse(searchTermsText || "[]");
+            searchTerms = Array.isArray(parsed) ? parsed.slice(0, 6) : [];
+          } catch {
+            searchTerms = ["tariff", "recession", "interest rate", "regulation"];
           }
         }
 
@@ -816,7 +841,7 @@ Now generate 3-5 search terms for ${symbol} (${name}, ${industry}):`,
 
         const allMarkets: any[] = [];
         
-        // Fetch in parallel for speed
+        // Fetch ALL search terms in parallel
         const fetches = searchTerms.map(async (term) => {
           try {
             const res = await fetch(
@@ -859,10 +884,12 @@ Now generate 3-5 search terms for ${symbol} (${name}, ${industry}):`,
         console.log(`[polymarket] ${symbol}: found ${unique.length} unique markets`);
 
         if (unique.length === 0) {
-          return jsonResponse({ markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` });
+          const emptyResult = { markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` };
+          await setCache(cacheKey, emptyResult, 30);
+          return jsonResponse(emptyResult);
         }
 
-        // Step 2: AI picks ONLY the 2-3 most directly relevant — MUST reject irrelevant ones
+        // Step 2: Claude picks ONLY the 2-4 most directly relevant
         const marketsForFilter = unique.slice(0, 25).map((m: any, i: number) => {
           let prices: any[] = [];
           try { prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices || []; } catch {}
@@ -871,54 +898,71 @@ Now generate 3-5 search terms for ${symbol} (${name}, ${industry}):`,
         }).join("\n");
 
         const filterText = await callAI(
-          "You are an expert stock analyst. You MUST be extremely selective. Return ONLY a JSON array of integers, or an empty array [] if NOTHING is relevant. NO explanation.",
+          "You are an expert stock analyst. Return ONLY a JSON array of integers (1-indexed), or empty array []. NO explanation.",
           `Company: ${symbol} (${name}), Industry: ${industry}
 
-Pick ONLY markets where the outcome would DIRECTLY affect ${symbol}'s revenue, costs, supply chain, or operations by ≥5%.
+Pick ONLY markets where the outcome would DIRECTLY affect ${symbol}'s revenue, costs, supply chain, or stock price by ≥3%.
 
-REJECT markets about:
-- Sports, entertainment, elections (unless the company IS in that industry)
-- Generic macro events with no specific link to this company
-- Anything where you can't explain in ONE sentence how the outcome moves ${symbol}'s stock
+REJECT:
+- Sports, entertainment, pop culture, elections (unless the company IS in politics/media)
+- Markets about individual people's personal lives
+- Anything where you can't explain a clear $ impact on ${symbol}
+
+KEEP:
+- Trade policy, tariffs affecting this company's imports/exports
+- Commodity prices the company depends on (oil for logistics, chips for tech, etc)
+- Regulatory actions targeting this industry
+- Geopolitical events affecting this company's operations
+- Weather/climate events impacting this company's infrastructure
 
 Markets:
 ${marketsForFilter}
 
-Return JSON array of 1-indexed numbers of the 1-3 MOST relevant, or [] if none qualify: `,
-          80,
+Return JSON array of 1-indexed numbers (max 4), or []:`,
+          100,
         );
 
         console.log(`[polymarket] ${symbol}: filter response: ${filterText}`);
 
+        let finalResult: any;
         try {
           const indices = JSON.parse(filterText || "[]");
           if (Array.isArray(indices) && indices.length > 0) {
             const filtered = indices
               .map((i: number) => unique[i - 1])
               .filter(Boolean)
-              .slice(0, 3);
+              .slice(0, 4);
             if (filtered.length > 0) {
-              return jsonResponse({ 
+              finalResult = { 
                 markets: filtered, 
                 queries: searchTerms,
                 searchUrl: `https://polymarket.com/search?query=${encodeURIComponent(searchTerms[0] || symbol)}` 
-              });
+              };
             }
           }
         } catch {}
 
-        // If AI filter returned nothing or failed, return EMPTY — don't show irrelevant garbage
-        return jsonResponse({ markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` });
+        if (!finalResult) {
+          finalResult = { markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` };
+        }
+
+        // Cache for 30 minutes
+        await setCache(cacheKey, finalResult, 30);
+        return jsonResponse(finalResult);
       } catch (e) {
         return jsonResponse({ markets: [], queries: [], error: String(e), searchUrl: `https://polymarket.com` });
       }
     }
 
-    // ─── POLYMARKET SUMMARY (AI analysis of prediction markets for a stock) ──
+    // ─── POLYMARKET SUMMARY (AI analysis of prediction markets for a stock) — cached 60min ──
     if (action === "polymarket-summary") {
       const { symbol, companyName, markets, profile } = params;
       const name = companyName || symbol;
       const industry = profile?.finnhubIndustry || "";
+
+      const cacheKey = `polysummary-${symbol}-${(markets || []).length}-v1`;
+      const cached = await getCached(cacheKey);
+      if (cached) return jsonResponse(cached);
 
       const marketsSummary = (markets || []).slice(0, 5).map((m: any, i: number) => {
         let prices: any[] = [];
@@ -952,7 +996,9 @@ Return JSON:
       );
 
       const parsed = parseJSON(text);
-      return jsonResponse({ summary: parsed });
+      const summaryResult = { summary: parsed };
+      await setCache(cacheKey, summaryResult, 60);
+      return jsonResponse(summaryResult);
     }
 
 
