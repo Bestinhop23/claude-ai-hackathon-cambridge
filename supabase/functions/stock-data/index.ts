@@ -1124,8 +1124,15 @@ Return JSON:
       return jsonResponse({ picks: enrichedPicks, macro, headlines: macroNews.slice(0, 6) });
     }
 
-    // ─── MARKET INSIGHTS (Polymarket-driven stock analysis) ──
+    // ─── MARKET INSIGHTS (Polymarket-driven stock analysis) — cached 60min ──
     if (action === "market-insights") {
+      const cacheKey = "market-insights-v1";
+      const cached = await getCached(cacheKey);
+      if (cached) {
+        console.log("[market-insights] returning cached result");
+        return jsonResponse(cached);
+      }
+
       try {
         const allMarkets: any[] = [];
         
@@ -1137,27 +1144,36 @@ Return JSON:
           "debt ceiling", "OPEC production"
         ];
         
-        for (const q of searchQueries) {
-          try {
-            const res = await fetch(
-              `https://gamma-api.polymarket.com/markets?closed=false&limit=3&search=${encodeURIComponent(q)}&order=volume&ascending=false`,
-              { headers: { Accept: "application/json" } }
-            );
-            if (res.ok) {
-              const data = await res.json();
-              allMarkets.push(...(Array.isArray(data) ? data : []).map((m: any) => ({
-                id: m.id,
-                question: m.question || m.title || "",
-                description: (m.description || "").slice(0, 200),
-                outcomePrices: m.outcomePrices || "[]",
-                outcomes: m.outcomes || "[]",
-                volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
-                slug: m.slug || "",
-                url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com`,
-                endDate: m.end_date_iso || m.endDate || "",
-              })));
-            } else { await res.text(); }
-          } catch { /* continue */ }
+        // Parallel fetch all search queries
+        const fetchResults = await Promise.allSettled(
+          searchQueries.map(async (q) => {
+            try {
+              const res = await fetch(
+                `https://gamma-api.polymarket.com/markets?closed=false&limit=3&search=${encodeURIComponent(q)}&order=volume&ascending=false`,
+                { headers: { Accept: "application/json" } }
+              );
+              if (res.ok) {
+                const data = await res.json();
+                return (Array.isArray(data) ? data : []).map((m: any) => ({
+                  id: m.id,
+                  question: m.question || m.title || "",
+                  description: (m.description || "").slice(0, 200),
+                  outcomePrices: m.outcomePrices || "[]",
+                  outcomes: m.outcomes || "[]",
+                  volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
+                  slug: m.slug || "",
+                  url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com`,
+                  endDate: m.end_date_iso || m.endDate || "",
+                }));
+              }
+              await res.text();
+              return [];
+            } catch { return []; }
+          })
+        );
+        
+        for (const r of fetchResults) {
+          if (r.status === "fulfilled") allMarkets.push(...r.value);
         }
 
         // Dedupe and sort by volume
@@ -1201,13 +1217,18 @@ Provide 4-6 winners and 4-6 losers. Be specific and quantitative.`,
         );
 
         const parsed = parseJSON(text);
-        return jsonResponse({
+        const result = {
           winners: parsed?.winners || [],
           losers: parsed?.losers || [],
           summary: parsed?.summary || "",
           markets: unique.slice(0, 10),
           searchUrl: "https://polymarket.com",
-        });
+        };
+
+        // Cache for 60 minutes
+        await setCache(cacheKey, result, 60);
+
+        return jsonResponse(result);
       } catch (e) {
         return jsonResponse({ winners: [], losers: [], markets: [], summary: "", error: String(e) });
       }
