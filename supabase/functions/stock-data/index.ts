@@ -1,6 +1,6 @@
 // stock-data edge function v3 – Claude primary, Polymarket, caching, linked sources
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -132,172 +132,6 @@ function parseJSON(text: string | null): any {
     if (match) return JSON.parse(match[0]);
   } catch { /* fallback */ }
   return null;
-}
-
-// ────────────────────────────────────────────────────────────
-// Polymarket relevance helpers
-// ────────────────────────────────────────────────────────────
-
-const POLY_NOISE_REGEX = /(nba|nfl|nhl|mlb|soccer|premier league|champions league|stanley cup|f1|formula 1|mma|ufc|wwe|tennis|golf|grammy|oscar|box office|celebrity|love island|kardashian|super bowl)/i;
-const POLY_MACRO_REGEX = /(tariff|trade|china|oil|diesel|opec|recession|inflation|interest rate|federal reserve|fed|war|sanction|shipping|freight|hurricane|wildfire|fda|drug pricing|antitrust|regulation|semiconductor|chip|export control|taiwan|debt ceiling|government shutdown|gdp|unemployment)/i;
-
-function parseOutcomePrices(raw: any): number[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw.map((v) => Number(v) || 0);
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.map((v) => Number(v) || 0) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-function isNoiseMarket(m: any): boolean {
-  const text = `${m?.question || ""} ${m?.description || ""}`;
-  return POLY_NOISE_REGEX.test(text);
-}
-
-function scoreMarketRelevance(m: any, keywords: string[], searchTerms: string[]): number {
-  const text = `${m?.question || ""} ${m?.description || ""}`.toLowerCase();
-  let score = 0;
-
-  const volume = Number(m?.volume || 0);
-  if (volume > 1_000_000) score += 4;
-  else if (volume > 250_000) score += 3;
-  else if (volume > 50_000) score += 2;
-  else if (volume > 10_000) score += 1;
-
-  for (const kw of keywords) if (kw && text.includes(kw.toLowerCase())) score += 3;
-  for (const term of searchTerms) if (term && text.includes(term.toLowerCase())) score += 2;
-  if (POLY_MACRO_REGEX.test(text)) score += 2;
-
-  return score;
-}
-
-function pickTopRelevantMarkets(markets: any[], keywords: string[], searchTerms: string[], max = 4): any[] {
-  const dedup = new Map<string, any>();
-  for (const m of markets) {
-    const id = String(m?.id || "");
-    if (!id || dedup.has(id)) continue;
-    dedup.set(id, m);
-  }
-
-  const unique = Array.from(dedup.values());
-  const nonNoise = unique.filter((m) => !isNoiseMarket(m));
-  const scored = nonNoise
-    .map((m) => ({ ...m, _score: scoreMarketRelevance(m, keywords, searchTerms) }))
-    .sort((a, b) => (b._score - a._score) || ((b.volume || 0) - (a.volume || 0)));
-
-  const strong = scored.filter((m) => m._score >= 4).slice(0, max);
-  if (strong.length > 0) return strong;
-
-  const fallback = scored.slice(0, max);
-  if (fallback.length > 0) return fallback;
-
-  return unique
-    .sort((a, b) => (Number(b?.volume || 0) - Number(a?.volume || 0)))
-    .slice(0, max);
-}
-
-function deriveTheme(question: string): string {
-  const q = (question || "").toLowerCase();
-  if (/oil|diesel|opec|crude/.test(q)) return "energy";
-  if (/tariff|trade|china|export control|import/.test(q)) return "trade";
-  if (/interest rate|federal reserve|fed|treasury|yield/.test(q)) return "rates";
-  if (/recession|gdp|unemployment|inflation/.test(q)) return "macro";
-  if (/war|sanction|nato|taiwan|iran|ukraine/.test(q)) return "geopolitics";
-  if (/hurricane|wildfire|storm|climate/.test(q)) return "weather";
-  if (/fda|drug pricing|medicare/.test(q)) return "health";
-  if (/semiconductor|chip|ai regulation|antitrust/.test(q)) return "tech-policy";
-  return "macro";
-}
-
-function buildHeuristicInsights(markets: any[]) {
-  const mapping: Record<string, { winners: Array<{ symbol: string; name: string }>; losers: Array<{ symbol: string; name: string }>; reason: string }> = {
-    energy: {
-      winners: [{ symbol: "XOM", name: "Exxon Mobil" }, { symbol: "CVX", name: "Chevron" }, { symbol: "SLB", name: "Schlumberger" }],
-      losers: [{ symbol: "UPS", name: "United Parcel Service" }, { symbol: "FDX", name: "FedEx" }, { symbol: "DAL", name: "Delta Air Lines" }],
-      reason: "energy input costs and fuel sensitivity",
-    },
-    trade: {
-      winners: [{ symbol: "NUE", name: "Nucor" }, { symbol: "CLF", name: "Cleveland-Cliffs" }, { symbol: "X", name: "U.S. Steel" }],
-      losers: [{ symbol: "AAPL", name: "Apple" }, { symbol: "WMT", name: "Walmart" }, { symbol: "AMZN", name: "Amazon" }],
-      reason: "import/export exposure and tariff pass-through",
-    },
-    rates: {
-      winners: [{ symbol: "JPM", name: "JPMorgan" }, { symbol: "BAC", name: "Bank of America" }, { symbol: "MS", name: "Morgan Stanley" }],
-      losers: [{ symbol: "NVDA", name: "NVIDIA" }, { symbol: "TSLA", name: "Tesla" }, { symbol: "ADBE", name: "Adobe" }],
-      reason: "discount-rate sensitivity and financing costs",
-    },
-    geopolitics: {
-      winners: [{ symbol: "LMT", name: "Lockheed Martin" }, { symbol: "RTX", name: "RTX" }, { symbol: "NOC", name: "Northrop Grumman" }],
-      losers: [{ symbol: "UPS", name: "United Parcel Service" }, { symbol: "FDX", name: "FedEx" }, { symbol: "AAL", name: "American Airlines" }],
-      reason: "defense demand versus global transport disruption",
-    },
-    weather: {
-      winners: [{ symbol: "HUBB", name: "Hubbell" }, { symbol: "ETN", name: "Eaton" }, { symbol: "PWR", name: "Quanta Services" }],
-      losers: [{ symbol: "ALL", name: "Allstate" }, { symbol: "TRV", name: "Travelers" }, { symbol: "PGR", name: "Progressive" }],
-      reason: "infrastructure resilience spend versus catastrophe losses",
-    },
-    health: {
-      winners: [{ symbol: "UNH", name: "UnitedHealth" }, { symbol: "ELV", name: "Elevance" }, { symbol: "CI", name: "Cigna" }],
-      losers: [{ symbol: "PFE", name: "Pfizer" }, { symbol: "MRK", name: "Merck" }, { symbol: "BMY", name: "Bristol Myers" }],
-      reason: "policy and drug-pricing pressure",
-    },
-    "tech-policy": {
-      winners: [{ symbol: "INTC", name: "Intel" }, { symbol: "QCOM", name: "Qualcomm" }, { symbol: "AVGO", name: "Broadcom" }],
-      losers: [{ symbol: "NVDA", name: "NVIDIA" }, { symbol: "AMAT", name: "Applied Materials" }, { symbol: "LRCX", name: "Lam Research" }],
-      reason: "export controls and regulatory constraints",
-    },
-    macro: {
-      winners: [{ symbol: "WMT", name: "Walmart" }, { symbol: "COST", name: "Costco" }, { symbol: "PG", name: "Procter & Gamble" }],
-      losers: [{ symbol: "CAT", name: "Caterpillar" }, { symbol: "DE", name: "Deere" }, { symbol: "F", name: "Ford" }],
-      reason: "defensive demand versus cyclical risk",
-    },
-  };
-
-  const winners: any[] = [];
-  const losers: any[] = [];
-  const seenW = new Set<string>();
-  const seenL = new Set<string>();
-
-  for (const market of markets.slice(0, 10)) {
-    const prices = parseOutcomePrices(market.outcomePrices);
-    const yes = prices[0] != null ? `${Math.round(prices[0] * 100)}%` : "?";
-    const theme = deriveTheme(market.question || "");
-    const pack = mapping[theme] || mapping.macro;
-
-    for (const s of pack.winners) {
-      if (seenW.has(s.symbol) || winners.length >= 6) continue;
-      winners.push({
-        symbol: s.symbol,
-        name: s.name,
-        relevantMarket: market.question,
-        impliedProbability: yes,
-        thesis: `${s.name} is positioned to benefit from ${pack.reason} if this market resolves as currently priced.`,
-      });
-      seenW.add(s.symbol);
-    }
-
-    for (const s of pack.losers) {
-      if (seenL.has(s.symbol) || losers.length >= 6) continue;
-      losers.push({
-        symbol: s.symbol,
-        name: s.name,
-        relevantMarket: market.question,
-        impliedProbability: yes,
-        thesis: `${s.name} faces downside risk from ${pack.reason} under the current market-implied path.`,
-      });
-      seenL.add(s.symbol);
-    }
-
-    if (winners.length >= 6 && losers.length >= 6) break;
-  }
-
-  return { winners: winners.slice(0, 6), losers: losers.slice(0, 6) };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -944,9 +778,10 @@ Return JSON:
     if (action === "polymarket") {
       const { symbol, companyName, profile } = params;
       const name = companyName || symbol;
-      const industry = String(profile?.finnhubIndustry || "");
-
-      const cacheKey = `polymarket-${symbol}-v3`;
+      const industry = profile?.finnhubIndustry || "";
+      const weburl = profile?.weburl || "";
+      
+      const cacheKey = `polymarket-${symbol}-v2`;
       const cached = await getCached(cacheKey);
       if (cached) {
         console.log(`[polymarket] ${symbol}: returning cached result`);
@@ -954,92 +789,177 @@ Return JSON:
       }
 
       try {
+        // Step 1: Claude generates VERY specific, granular search terms
+        // Use a detailed industry map to avoid generic searches
         const industryMap: Record<string, string[]> = {
-          "air freight": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "global shipping"],
-          "logistics": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "global shipping"],
-          "transport": ["tariff", "oil price", "trade war", "hurricane", "freight rates"],
-          "defense": ["war", "nato", "defense spending", "iran", "sanctions"],
-          "aerospace": ["war", "nato", "defense spending", "faa", "aircraft"],
-          "pharma": ["fda", "drug pricing", "medicare", "patent"],
-          "biotech": ["fda approval", "clinical trial", "drug pricing"],
-          "software": ["ai regulation", "antitrust", "data privacy", "cybersecurity"],
-          "semiconductor": ["chip export", "taiwan", "china semiconductor", "ai chip", "export controls"],
-          "bank": ["interest rate", "recession", "bank regulation", "credit"],
+          "air freight": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "supply chain"],
+          "trucking": ["tariff", "oil price", "diesel", "recession", "highway"],
+          "logistics": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel", "supply chain"],
+          "transportation": ["tariff", "oil price", "trade war", "hurricane", "diesel fuel"],
+          "defense": ["war", "NATO", "defense spending", "Iran", "military"],
+          "aerospace": ["war", "NATO", "defense spending", "Boeing", "FAA"],
+          "pharma": ["FDA", "drug pricing", "Medicare", "patent"],
+          "biotech": ["FDA approval", "clinical trial", "drug pricing"],
+          "technology": ["AI regulation", "antitrust", "data privacy", "semiconductor"],
+          "software": ["AI regulation", "antitrust", "data privacy", "cybersecurity"],
+          "semiconductor": ["chip export", "TSMC", "China semiconductor", "AI chip"],
+          "banking": ["interest rate", "recession", "bank regulation", "credit"],
           "financial": ["interest rate", "recession", "regulation", "credit"],
           "insurance": ["hurricane", "wildfire", "climate", "interest rate"],
-          "energy": ["oil price", "opec", "sanctions", "natural gas"],
+          "oil": ["oil price", "OPEC", "sanctions", "pipeline", "natural gas"],
+          "energy": ["oil price", "renewable energy", "nuclear", "natural gas"],
+          "mining": ["commodity price", "China demand", "lithium", "copper"],
           "retail": ["consumer spending", "recession", "tariff", "inflation"],
-          "auto": ["ev", "tariff", "interest rate", "oil price"],
+          "auto": ["EV", "tariff", "interest rate", "oil price"],
+          "food": ["commodity price", "drought", "food safety", "tariff"],
+          "media": ["streaming", "advertising", "TikTok", "regulation"],
+          "telecom": ["spectrum", "5G", "regulation", "net neutrality"],
+          "real estate": ["interest rate", "housing market", "recession"],
+          "healthcare": ["Medicare", "drug pricing", "FDA", "regulation"],
         };
 
-        const defaultMacroTerms = ["tariff", "recession", "interest rate", "inflation", "oil price", "sanctions", "china trade", "export controls"];
+        // Find matching industry terms
         let searchTerms: string[] = [];
-
-        const loweredIndustry = industry.toLowerCase();
-        for (const [k, terms] of Object.entries(industryMap)) {
-          if (loweredIndustry.includes(k)) {
+        const industryLower = industry.toLowerCase();
+        for (const [key, terms] of Object.entries(industryMap)) {
+          if (industryLower.includes(key)) {
             searchTerms = terms;
             break;
           }
         }
 
-        if (searchTerms.length === 0) searchTerms = defaultMacroTerms;
-        searchTerms = Array.from(new Set([...searchTerms, ...defaultMacroTerms])).slice(0, 12);
+        // If no match, ask Claude
+        if (searchTerms.length === 0) {
+          const searchTermsText = await callAI(
+            "Return ONLY a JSON array of 4-6 strings. NO explanation.",
+            `Company: ${symbol} (${name}), Industry: ${industry}
+Generate Polymarket search terms for events that would move this stock ±5%.
+DO NOT search for the company name. Search for EXTERNAL events (tariffs, wars, regulations, commodity prices, weather, etc).
+Examples: "oil price", "tariff China", "hurricane", "interest rate", "FDA approval"`,
+            150,
+          );
+          try {
+            const parsed = JSON.parse(searchTermsText || "[]");
+            searchTerms = Array.isArray(parsed) ? parsed.slice(0, 6) : [];
+          } catch {
+            searchTerms = ["tariff", "recession", "interest rate", "regulation"];
+          }
+        }
 
-        console.log(`[polymarket] ${symbol}: search terms ${JSON.stringify(searchTerms)}`);
+        console.log(`[polymarket] ${symbol}: searching with terms: ${JSON.stringify(searchTerms)}`);
 
-        const fetches = await Promise.allSettled(
-          searchTerms.map(async (term) => {
+        const allMarkets: any[] = [];
+        
+        // Fetch ALL search terms in parallel
+        const fetches = searchTerms.map(async (term) => {
+          try {
             const res = await fetch(
-              `https://gamma-api.polymarket.com/markets?closed=false&limit=25&search=${encodeURIComponent(term)}&order=volume&ascending=false`,
-              { headers: { Accept: "application/json" } },
+              `https://gamma-api.polymarket.com/markets?closed=false&limit=5&search=${encodeURIComponent(term)}&order=volume&ascending=false`,
+              { headers: { Accept: "application/json" } }
             );
-            if (!res.ok) {
-              await res.text();
-              return [];
+            if (res.ok) {
+              const data = await res.json();
+              return (Array.isArray(data) ? data : []).map((m: any) => ({
+                id: m.id || m.condition_id,
+                question: m.question || m.title || "",
+                description: (m.description || "").slice(0, 300),
+                outcomePrices: m.outcomePrices || m.outcome_prices || [],
+                outcomes: m.outcomes || [],
+                volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
+                liquidity: Number(m.liquidity ?? m.liquidityNum ?? 0) || 0,
+                endDate: m.end_date_iso || m.endDate || "",
+                active: m.active ?? true,
+                slug: m.slug || m.market_slug || "",
+                url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com/search?query=${encodeURIComponent(term)}`,
+                _searchTerm: term,
+              }));
             }
-            const data = await res.json();
-            return (Array.isArray(data) ? data : []).map((m: any) => ({
-              id: m.id || m.condition_id,
-              question: m.question || m.title || "",
-              description: (m.description || "").slice(0, 300),
-              outcomePrices: m.outcomePrices || m.outcome_prices || [],
-              outcomes: m.outcomes || [],
-              volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
-              liquidity: Number(m.liquidity ?? m.liquidityNum ?? 0) || 0,
-              endDate: m.end_date_iso || m.endDate || "",
-              active: m.active ?? true,
-              slug: m.slug || m.market_slug || "",
-              url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com/search?query=${encodeURIComponent(term)}`,
-              _searchTerm: term,
-            }));
-          }),
+            await res.text();
+            return [];
+          } catch { return []; }
+        });
+        
+        const results = await Promise.all(fetches);
+        results.forEach(r => allMarkets.push(...r));
+        
+        // Deduplicate by id
+        const seen = new Set<string>();
+        const unique = allMarkets.filter(m => {
+          if (!m.id || seen.has(m.id)) return false;
+          seen.add(m.id);
+          return true;
+        });
+
+        console.log(`[polymarket] ${symbol}: found ${unique.length} unique markets`);
+
+        if (unique.length === 0) {
+          const emptyResult = { markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` };
+          await setCache(cacheKey, emptyResult, 30);
+          return jsonResponse(emptyResult);
+        }
+
+        // Step 2: Claude picks ONLY the 2-4 most directly relevant
+        const marketsForFilter = unique.slice(0, 25).map((m: any, i: number) => {
+          let prices: any[] = [];
+          try { prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices || []; } catch {}
+          const yesPrice = prices[0] ? `${(parseFloat(prices[0]) * 100).toFixed(0)}%` : "?";
+          return `${i + 1}. "${m.question}" (YES: ${yesPrice}, Vol: $${Math.round((m.volume || 0) / 1000)}K)`;
+        }).join("\n");
+
+        const filterText = await callAI(
+          "You are an expert stock analyst. Return ONLY a JSON array of integers (1-indexed), or empty array []. NO explanation.",
+          `Company: ${symbol} (${name}), Industry: ${industry}
+
+Pick ONLY markets where the outcome would DIRECTLY affect ${symbol}'s revenue, costs, supply chain, or stock price by ≥3%.
+
+REJECT:
+- Sports, entertainment, pop culture, elections (unless the company IS in politics/media)
+- Markets about individual people's personal lives
+- Anything where you can't explain a clear $ impact on ${symbol}
+
+KEEP:
+- Trade policy, tariffs affecting this company's imports/exports
+- Commodity prices the company depends on (oil for logistics, chips for tech, etc)
+- Regulatory actions targeting this industry
+- Geopolitical events affecting this company's operations
+- Weather/climate events impacting this company's infrastructure
+
+Markets:
+${marketsForFilter}
+
+Return JSON array of 1-indexed numbers (max 4), or []:`,
+          100,
         );
 
-        const allMarkets = fetches
-          .filter((r): r is PromiseFulfilledResult<any[]> => r.status === "fulfilled")
-          .flatMap((r) => r.value)
-          .filter((m) => !!m?.question);
+        console.log(`[polymarket] ${symbol}: filter response: ${filterText}`);
 
-        const selectedBase = pickTopRelevantMarkets(allMarkets, searchTerms, searchTerms, 6);
-        const matchTokens = Array.from(new Set(searchTerms.flatMap((t) => t.toLowerCase().split(/\s+/).filter((w) => w.length >= 4))));
-        const selected = selectedBase.filter((m) => {
-          const text = `${m?.question || ""} ${m?.description || ""}`.toLowerCase();
-          return matchTokens.some((token) => text.includes(token));
-        }).slice(0, 4);
+        let finalResult: any;
+        try {
+          const indices = JSON.parse(filterText || "[]");
+          if (Array.isArray(indices) && indices.length > 0) {
+            const filtered = indices
+              .map((i: number) => unique[i - 1])
+              .filter(Boolean)
+              .slice(0, 4);
+            if (filtered.length > 0) {
+              finalResult = { 
+                markets: filtered, 
+                queries: searchTerms,
+                searchUrl: `https://polymarket.com/search?query=${encodeURIComponent(searchTerms[0] || symbol)}` 
+              };
+            }
+          }
+        } catch {}
 
-        const result = {
-          markets: selected,
-          queries: searchTerms.slice(0, 8),
-          searchUrl: `https://polymarket.com/search?query=${encodeURIComponent(searchTerms[0] || symbol)}`,
-        };
+        if (!finalResult) {
+          finalResult = { markets: [], queries: searchTerms, searchUrl: `https://polymarket.com` };
+        }
 
-        console.log(`[polymarket] ${symbol}: selected ${selected.length} markets from ${allMarkets.length} candidates`);
-
-        await setCache(cacheKey, result, 30);
-        return jsonResponse(result);
+        // Cache for 30 minutes
+        await setCache(cacheKey, finalResult, 30);
+        return jsonResponse(finalResult);
       } catch (e) {
-        return jsonResponse({ markets: [], queries: [], error: String(e), searchUrl: "https://polymarket.com" });
+        return jsonResponse({ markets: [], queries: [], error: String(e), searchUrl: `https://polymarket.com` });
       }
     }
 
@@ -1270,7 +1190,7 @@ Return JSON:
 
     // ─── MARKET INSIGHTS (Polymarket-driven stock analysis) — cached 60min ──
     if (action === "market-insights") {
-      const cacheKey = "market-insights-v2";
+      const cacheKey = "market-insights-v1";
       const cached = await getCached(cacheKey);
       if (cached) {
         console.log("[market-insights] returning cached result");
@@ -1278,69 +1198,100 @@ Return JSON:
       }
 
       try {
+        const allMarkets: any[] = [];
+        
+        // Search for high-impact macro/geopolitical markets that directly affect equities
         const searchQueries = [
-          "tariff", "china trade", "federal reserve", "interest rate", "inflation",
-          "recession", "oil price", "opec", "war", "sanctions", "gdp",
-          "unemployment", "debt ceiling", "government shutdown", "export controls",
-          "semiconductor", "shipping", "hurricane", "fda", "antitrust",
+          "tariff", "recession", "Federal Reserve rate", "S&P 500",
+          "oil price", "China trade", "inflation", "NATO", "war",
+          "sanctions", "GDP", "unemployment", "government shutdown",
+          "debt ceiling", "OPEC production"
         ];
-
+        
+        // Parallel fetch all search queries
         const fetchResults = await Promise.allSettled(
           searchQueries.map(async (q) => {
-            const res = await fetch(
-              `https://gamma-api.polymarket.com/markets?closed=false&limit=15&search=${encodeURIComponent(q)}&order=volume&ascending=false`,
-              { headers: { Accept: "application/json" } },
-            );
-            if (!res.ok) {
+            try {
+              const res = await fetch(
+                `https://gamma-api.polymarket.com/markets?closed=false&limit=3&search=${encodeURIComponent(q)}&order=volume&ascending=false`,
+                { headers: { Accept: "application/json" } }
+              );
+              if (res.ok) {
+                const data = await res.json();
+                return (Array.isArray(data) ? data : []).map((m: any) => ({
+                  id: m.id,
+                  question: m.question || m.title || "",
+                  description: (m.description || "").slice(0, 200),
+                  outcomePrices: m.outcomePrices || "[]",
+                  outcomes: m.outcomes || "[]",
+                  volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
+                  slug: m.slug || "",
+                  url: m.slug ? `https://polymarket.com/event/${m.slug}` : `https://polymarket.com`,
+                  endDate: m.end_date_iso || m.endDate || "",
+                }));
+              }
               await res.text();
               return [];
-            }
-            const data = await res.json();
-            return (Array.isArray(data) ? data : []).map((m: any) => ({
-              id: m.id || m.condition_id,
-              question: m.question || m.title || "",
-              description: (m.description || "").slice(0, 200),
-              outcomePrices: m.outcomePrices || m.outcome_prices || [],
-              outcomes: m.outcomes || [],
-              volume: Number(m.volume ?? m.volumeNum ?? 0) || 0,
-              slug: m.slug || "",
-              url: m.slug ? `https://polymarket.com/event/${m.slug}` : "https://polymarket.com",
-              endDate: m.end_date_iso || m.endDate || "",
-              _searchTerm: q,
-            }));
-          }),
+            } catch { return []; }
+          })
         );
-
-        const allMarkets = fetchResults
-          .filter((r): r is PromiseFulfilledResult<any[]> => r.status === "fulfilled")
-          .flatMap((r) => r.value);
-
-        let curated = pickTopRelevantMarkets(allMarkets, searchQueries, searchQueries, 12)
-          .filter((m) => POLY_MACRO_REGEX.test(`${m.question || ""} ${m.description || ""}`))
-          .slice(0, 10);
-
-        if (curated.length === 0) {
-          curated = pickTopRelevantMarkets(allMarkets, searchQueries, searchQueries, 10)
-            .filter((m) => !isNoiseMarket(m))
-            .slice(0, 10);
+        
+        for (const r of fetchResults) {
+          if (r.status === "fulfilled") allMarkets.push(...r.value);
         }
 
-        const { winners, losers } = buildHeuristicInsights(curated);
+        // Dedupe and sort by volume
+        const seen = new Set<string>();
+        const unique = allMarkets.filter(m => {
+          if (!m.id || seen.has(m.id)) return false;
+          seen.add(m.id);
+          return true;
+        }).sort((a, b) => (b.volume || 0) - (a.volume || 0)).slice(0, 20);
 
-        const summaryThemes = Array.from(new Set(curated.slice(0, 6).map((m) => deriveTheme(m.question || ""))));
-        const summary = curated.length > 0
-          ? `Signals this hour are concentrated in ${summaryThemes.join(", ")}. Winners/losers are mapped from those exact markets and refreshed every hour.`
-          : "No high-confidence macro markets cleared the relevance filter this hour.";
+        // Ask AI to identify stock winners/losers with detailed thesis
+        const marketSummary = unique.slice(0, 12).map((m: any, i: number) => {
+          let prices: any[] = [];
+          try { prices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices; } catch {}
+          const yesPrice = prices[0] ? `${(parseFloat(prices[0]) * 100).toFixed(0)}%` : "?";
+          return `${i + 1}. "${m.question}" (YES: ${yesPrice}, Vol: $${Math.round((m.volume || 0) / 1000)}K)`;
+        }).join("\n");
 
+        const text = await callAI(
+          "You are an elite macro strategist at a top hedge fund. You translate prediction market probabilities into specific, actionable equity trades with detailed causal reasoning. Respond ONLY with valid JSON.",
+          `These are LIVE prediction markets with real money behind them:
+
+${marketSummary}
+
+Identify stocks that would be DIRECTLY and MATERIALLY affected if these outcomes materialize. Focus on the highest-volume, highest-conviction markets.
+
+For each stock pick:
+- Trace the SPECIFIC causal chain from the prediction market outcome to the stock's revenue/costs
+- Include rough magnitude of impact (e.g., "could reduce revenue by ~5-10%")
+- Reference the specific prediction market probability
+
+Return JSON:
+{
+  "winners": [{ "symbol": "...", "name": "...", "thesis": "2-3 sentence detailed thesis with specific numbers and causal chain from the prediction market to stock impact", "relevantMarket": "the exact prediction market question", "impliedProbability": "the YES price" }],
+  "losers": [{ "symbol": "...", "name": "...", "thesis": "2-3 sentence detailed thesis with specific numbers and causal chain", "relevantMarket": "the exact prediction market question", "impliedProbability": "the YES price" }],
+  "summary": "3-4 sentence macro overview synthesizing the key signals from prediction markets into an investment narrative"
+}
+
+Provide 4-6 winners and 4-6 losers. Be specific and quantitative.`,
+          2500,
+        );
+
+        const parsed = parseJSON(text);
         const result = {
-          winners,
-          losers,
-          summary,
-          markets: curated,
+          winners: parsed?.winners || [],
+          losers: parsed?.losers || [],
+          summary: parsed?.summary || "",
+          markets: unique.slice(0, 10),
           searchUrl: "https://polymarket.com",
         };
 
+        // Cache for 60 minutes
         await setCache(cacheKey, result, 60);
+
         return jsonResponse(result);
       } catch (e) {
         return jsonResponse({ winners: [], losers: [], markets: [], summary: "", error: String(e) });
