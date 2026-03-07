@@ -1025,9 +1025,15 @@ Return JSON:
       return jsonResponse({ research: parsed, raw: text });
     }
 
-    // ─── ANALYZE (Orchestrator – structured investment brief) ──
+    // ─── ANALYZE (Orchestrator – structured investment brief) — cached 30min ──
     if (action === "analyze") {
       const { symbol, companyName, theme } = params;
+      const cacheKey = `analyze-${symbol || theme}-v1`;
+      const cached = await getCached(cacheKey);
+      if (cached) {
+        console.log(`[analyze] ${symbol}: returning cached result`);
+        return jsonResponse(cached);
+      }
       const ticker = symbol || theme || "SPY";
       const name = companyName || ticker;
 
