@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, BarChart3, Loader2, TrendingUp, TrendingDown, ExternalLink, Sparkles, Briefcase, DollarSign } from "lucide-react";
+import { Activity, BarChart3, Loader2, Briefcase, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
