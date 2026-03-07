@@ -983,9 +983,24 @@ Return JSON:
           "sanctions",
         ];
 
+        const queryPrompt = [
+          `Company: ${symbol} (${name})`,
+          `Industry: ${industry || "Unknown"}`,
+          `Website: ${weburl || "N/A"}`,
+          "",
+          "Return JSON as:",
+          '{ "queries": ["...", "..."] }',
+          "",
+          "Rules:",
+          `- Return 8 concise search queries (2-4 words each) for EXTERNAL events that would move ${symbol} by at least ±3%.`,
+          "- Focus on macro/geopolitical/weather/regulatory/commodity events.",
+          "- Never include sports, entertainment, celebrities, or local election races.",
+          "- Include at least one weather/climate query and one war/geopolitical query where relevant to this industry.",
+        ].join("\n");
+
         const generatedTermsText = await callAI(
           "You are a macro event query generator for equity analysis. Return ONLY valid JSON.",
-          `Company: ${symbol} (${name})\nIndustry: ${industry || "Unknown"}\nWebsite: ${weburl || "N/A"}\n\nReturn JSON as:\n{ "queries": ["...", "..."] }\n\nRules:\n- Return 8 concise search queries (2-4 words each) for EXTERNAL events that would move ${symbol} by at least ±3%.\n- Focus on macro/geopolitical/weather/regulatory/commodity events.\n- Never include sports, entertainment, celebrities, or local election races.\n- Include at least one weather/climate query and one war/geopolitical query where relevant to this industry.`,
+          queryPrompt,
           260,
         );
 
@@ -1031,9 +1046,29 @@ Return JSON:
           return `${i + 1}. ${m.question} | YES=${yes} | Vol=$${Math.round((m.volume || 0) / 1000)}K | Query=${m._searchTerm || "n/a"}`;
         }).join("\n");
 
+        const rankingPrompt = [
+          `Stock: ${symbol} (${name})`,
+          `Industry: ${industry || "Unknown"}`,
+          "",
+          "From the candidate prediction markets below, pick ONLY 2-3 markets that are most materially relevant to this stock.",
+          "",
+          "Reject anything in sports, entertainment, celebrity, and local election races.",
+          "Only keep markets where the outcome has a direct, plausible revenue/cost/supply-chain impact on this company.",
+          "",
+          "Return JSON:",
+          "{",
+          '  "picks": [',
+          '    { "index": 1, "relevance": 0-100, "reason": "max 18 words" }',
+          "  ]",
+          "}",
+          "",
+          "Candidates:",
+          shortlistText,
+        ].join("\n");
+
         const rankingText = await callAI(
           "You are a strict equity relevance filter. Return ONLY valid JSON.",
-          `Stock: ${symbol} (${name})\nIndustry: ${industry || "Unknown"}\n\nFrom the candidate prediction markets below, pick ONLY 2-3 markets that are most materially relevant to this stock.\n\nReject anything in sports, entertainment, celebrity, and local election races.\nOnly keep markets where the outcome has a direct, plausible revenue/cost/supply-chain impact on this company.\n\nReturn JSON:\n{\n  "picks": [\n    { "index": 1, "relevance": 0-100, "reason": "max 18 words" }\n  ]\n}\n\nCandidates:\n${shortlistText}`,
+          rankingPrompt,
           400,
         );
 
