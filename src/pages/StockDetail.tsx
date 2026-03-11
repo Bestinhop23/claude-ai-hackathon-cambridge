@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Activity, Sun, Moon as MoonIcon, BarChart3, Newspaper,
@@ -7,7 +7,8 @@ import {
   ArrowUpRight, ArrowDownRight, Link2, Factory, Truck, Users,
   Crosshair, MapPin, Calendar, DollarSign, Briefcase, Phone, Bot,
 } from "lucide-react";
-import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary, useSecFilings } from "@/hooks/useStockData";
+import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary, useSecFilings, useChart } from "@/hooks/useStockData";
+import { isMarketOpen, getMarketStatusLabel, getMarketStatusColor } from "@/lib/market-hours";
 import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import StockChart from "@/components/StockChart";
@@ -16,7 +17,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import SignalsTab from "@/components/SignalsTab";
+import PredictionsTab from "@/components/PredictionsTab";
 /* ── Claude branding ────────────────────────────────────── */
 const CLAUDE_ORANGE = "#D97757";
 const ClaudeLogo = ({ size = 14 }: { size?: number }) => (
@@ -121,7 +123,7 @@ const StockDetail = () => {
   const { symbol = "" } = useParams();
   const upperSymbol = symbol.toUpperCase();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"overview" | "fundamentals" | "deep" | "news" | "polymarket" | "sec">("overview");
+  const [tab, setTab] = useState<"overview" | "fundamentals" | "deep" | "news" | "polymarket" | "sec" | "signals" | "predictions">("overview");
 
   const { data: quote, isLoading } = useQuote(upperSymbol);
   const { convert, symbol: currSym } = useCurrency();
@@ -135,6 +137,8 @@ const StockDetail = () => {
   const { data: polySummary, isLoading: polySummaryLoading } = usePolymarketSummary(tab === "polymarket" ? upperSymbol : "", quote?.shortName || quote?.longName, polyData?.markets || [], profileData?.profile);
   const { data: sentimentData, isLoading: sentimentLoading } = useSentiment(upperSymbol, articles);
   const { data: secData, isLoading: secLoading } = useSecFilings(tab === "sec" ? upperSymbol : "");
+  const { data: chartData6M } = useChart((tab === "signals" || tab === "predictions") ? upperSymbol : "", "6mo", "1d");
+  const { data: chartData5Y } = useChart(tab === "predictions" ? upperSymbol : "", "5y", "1wk");
 
   const isPositive = (quote?.regularMarketChange ?? 0) >= 0;
   const [displayPrice, setDisplayPrice] = useState<number | null>(null);
@@ -149,8 +153,10 @@ const StockDetail = () => {
     }
   }, [quote?.regularMarketPrice, convert]);
 
+  const marketOpen = isMarketOpen();
+
   useEffect(() => {
-    if (quote?.regularMarketPrice == null) return;
+    if (quote?.regularMarketPrice == null || !marketOpen) return;
     const base = convert(quote.regularMarketPrice);
     const interval = setInterval(() => {
       const jitter = base * (Math.random() - 0.5) * 0.0004;
@@ -162,7 +168,7 @@ const StockDetail = () => {
       setTimeout(() => setFlash(null), 200);
     }, 800 + Math.random() * 600);
     return () => clearInterval(interval);
-  }, [quote?.regularMarketPrice, convert]);
+  }, [quote?.regularMarketPrice, convert, marketOpen]);
 
   const profile = profileData?.profile;
   const metrics = profileData?.metrics || {};
@@ -267,7 +273,7 @@ const StockDetail = () => {
                         <h1 className="text-lg font-bold text-foreground">{upperSymbol}</h1>
                         <span className="text-[10px] text-muted-foreground">{quote?.shortName || quote?.longName}</span>
                       </div>
-                      <p className="text-[9px] text-muted-foreground">{quote?.exchange} · {quote?.currency}</p>
+                      <p className="text-[9px] text-muted-foreground">{quote?.exchange} · {quote?.currency} · <span className={getMarketStatusColor()}>{getMarketStatusLabel()}</span></p>
                     </div>
                   </div>
                   <div className="flex items-baseline gap-2 mt-3">
@@ -350,9 +356,11 @@ const StockDetail = () => {
         <div className="flex items-center gap-1 rounded-lg bg-muted p-1 mb-4 overflow-x-auto">
           <TabBtn active={tab === "overview"} label="Overview" icon={Activity} onClick={() => setTab("overview")} />
           <TabBtn active={tab === "fundamentals"} label="Fundamentals" icon={BarChart3} onClick={() => setTab("fundamentals")} />
+          <TabBtn active={tab === "signals"} label="Signals" icon={Zap} onClick={() => setTab("signals")} />
+          <TabBtn active={tab === "predictions"} label="ML Predictions" icon={Target} onClick={() => setTab("predictions")} />
           <TabBtn active={tab === "deep"} label="Deep Analysis" icon={Crosshair} onClick={() => setTab("deep")} />
           <TabBtn active={tab === "polymarket"} label="Polymarket" onClick={() => setTab("polymarket")} customIcon={<PolymarketLogo size={14} />} />
-          <TabBtn active={tab === "sec"} label="SEC Filings" icon={Building2} onClick={() => setTab("sec")} />
+          <TabBtn active={tab === "sec"} label="Filings" icon={Building2} onClick={() => setTab("sec")} />
           <TabBtn active={tab === "news"} label="News" icon={Newspaper} onClick={() => setTab("news")} />
         </div>
 
@@ -806,7 +814,13 @@ const StockDetail = () => {
           </div>
         )}
 
-        {/* ═══════ SEC FILINGS TAB ═══════ */}
+        {/* ═══════ SIGNALS TAB ═══════ */}
+        {tab === "signals" && <SignalsTab chartData={chartData6M || []} quote={quote} metrics={metrics} currSym={currSym} />}
+
+        {/* ═══════ ML PREDICTIONS TAB ═══════ */}
+        {tab === "predictions" && <PredictionsTab chartData={chartData5Y || []} symbol={upperSymbol} quote={quote} currSym={currSym} convert={convert} />}
+
+
         {tab === "sec" && (
           <div className="space-y-4">
             <Section icon={Building2} title={`SEC Filings — ${upperSymbol}`} loading={secLoading} badge={<ClaudeBadge label="AI Summaries" />}>
