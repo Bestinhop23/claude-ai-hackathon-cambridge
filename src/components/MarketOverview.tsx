@@ -1,9 +1,36 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Zap, Loader2, ExternalLink, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { useMarketMovers, useMarketPicks, type YahooQuote, type MarketPick } from "@/hooks/useStockData";
+import { TrendingUp, TrendingDown, Zap, Loader2, ExternalLink, ArrowUpRight, ArrowDownRight, Clock } from "lucide-react";
+import { useMarketMovers, useMarketPicks, useMultiQuote, type YahooQuote, type MarketPick } from "@/hooks/useStockData";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { getMarketStatusLabel, getMarketStatusColor } from "@/lib/market-hours";
 import StockLogo from "./StockLogo";
 import { Skeleton } from "./ui/skeleton";
+
+/* ── Bond & Commodity symbols ───────────────────────────── */
+const BOND_SYMBOLS = ["^TNX", "^TYX", "^FVX", "^IRX", "TLT", "SHY", "IEF", "AGG"];
+const COMMODITY_SYMBOLS = ["GC=F", "SI=F", "CL=F", "NG=F", "HG=F", "PL=F", "ZC=F", "ZW=F"];
+
+const BOND_NAMES: Record<string, string> = {
+  "^TNX": "10-Year Treasury Yield",
+  "^TYX": "30-Year Treasury Yield",
+  "^FVX": "5-Year Treasury Yield",
+  "^IRX": "13-Week Treasury Bill",
+  "TLT": "20+ Year Treasury Bond ETF",
+  "SHY": "1-3 Year Treasury Bond ETF",
+  "IEF": "7-10 Year Treasury Bond ETF",
+  "AGG": "US Aggregate Bond ETF",
+};
+
+const COMMODITY_NAMES: Record<string, string> = {
+  "GC=F": "Gold",
+  "SI=F": "Silver",
+  "CL=F": "Crude Oil WTI",
+  "NG=F": "Natural Gas",
+  "HG=F": "Copper",
+  "PL=F": "Platinum",
+  "ZC=F": "Corn",
+  "ZW=F": "Wheat",
+};
 
 /* ── Compact row for winners/losers ─────────────────────── */
 
@@ -41,7 +68,35 @@ function MoverRow({ q, rank, currSym, convert }: {
   );
 }
 
-/* ── Pick card with news citation ───────────────────────── */
+/* ── Asset row for bonds/commodities ────────────────────── */
+
+function AssetRow({ q, name, currSym, convert }: {
+  q: YahooQuote; name: string; currSym: string; convert: (v: number) => number;
+}) {
+  const navigate = useNavigate();
+  const up = (q.regularMarketChangePercent ?? 0) >= 0;
+  const isYield = q.symbol.startsWith("^");
+
+  return (
+    <button
+      onClick={() => navigate(`/stock/${q.symbol}`)}
+      className="flex items-center gap-2 px-3 py-2 hover:bg-secondary/60 transition-colors w-full text-left group"
+    >
+      <div className="flex-1 min-w-0">
+        <span className="text-xs font-medium text-foreground group-hover:text-primary transition-colors">{name}</span>
+        <span className="text-[10px] text-muted-foreground ml-1.5">{q.symbol}</span>
+      </div>
+      <span className="font-mono text-xs text-foreground tabular-nums">
+        {isYield ? `${q.regularMarketPrice.toFixed(3)}%` : `${currSym}${convert(q.regularMarketPrice).toFixed(2)}`}
+      </span>
+      <span className={`font-mono text-[10px] font-semibold tabular-nums min-w-[50px] text-right ${up ? "text-stock-up" : "text-stock-down"}`}>
+        {up ? "+" : ""}{(q.regularMarketChangePercent ?? 0).toFixed(2)}%
+      </span>
+    </button>
+  );
+}
+
+/* ── Pick card ──────────────────────────────────────────── */
 
 function PickCard({ pick, currSym, convert }: {
   pick: MarketPick; currSym: string; convert: (v: number) => number;
@@ -62,9 +117,7 @@ function PickCard({ pick, currSym, convert }: {
               {pick.symbol}
             </span>
             <span className={`inline-flex items-center gap-0.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-              bullish
-                ? "bg-stock-up/15 text-stock-up"
-                : "bg-stock-down/15 text-stock-down"
+              bullish ? "bg-stock-up/15 text-stock-up" : "bg-stock-down/15 text-stock-down"
             }`}>
               {bullish ? <ArrowUpRight className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
               {pick.direction}
@@ -130,78 +183,78 @@ function ColumnSkeleton({ rows = 8 }: { rows?: number }) {
 const MarketOverview = () => {
   const { data: movers, isLoading: moversLoading } = useMarketMovers();
   const { data: picks, isLoading: picksLoading } = useMarketPicks();
+  const { data: bondQuotes, isLoading: bondsLoading } = useMultiQuote(BOND_SYMBOLS);
+  const { data: commodityQuotes, isLoading: commoditiesLoading } = useMultiQuote(COMMODITY_SYMBOLS);
   const { convert, symbol: currSym } = useCurrency();
+
+  const statusLabel = getMarketStatusLabel();
+  const statusColor = getMarketStatusColor();
 
   return (
     <div className="space-y-4">
-      {/* Macro banner */}
-      {picks?.macro && (
-        <div className="bg-secondary/40 border border-border rounded-lg px-4 py-2.5 flex items-start gap-2">
-          <Zap className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-          <p className="text-xs text-foreground/80 leading-relaxed">{picks.macro}</p>
+      {/* Market status + Macro banner */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className={`flex items-center gap-1.5 text-xs font-medium ${statusColor}`}>
+          <Clock className="h-3.5 w-3.5" />
+          {statusLabel}
         </div>
-      )}
+        {picks?.macro && (
+          <div className="flex-1 bg-secondary/40 border border-border rounded-lg px-4 py-2.5 flex items-start gap-2">
+            <Zap className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+            <p className="text-xs text-foreground/80 leading-relaxed">{picks.macro}</p>
+          </div>
+        )}
+      </div>
 
-      {/* 3-column terminal grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-0 border border-border rounded-lg overflow-hidden bg-card">
-        {/* ── Top Losers ───────────────────────────────── */}
+      {/* 3-column terminal grid: Losers | Winners | Picks */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 border border-border rounded-lg overflow-hidden bg-card">
         <div className="border-b lg:border-b-0 lg:border-r border-border">
-          <ColHeader
-            icon={<TrendingDown className="h-4 w-4 text-stock-down" />}
-            title="Top Losers"
-            subtitle="Biggest decliners today"
-          />
+          <ColHeader icon={<TrendingDown className="h-4 w-4 text-stock-down" />} title="Top Losers" subtitle="Biggest decliners today" />
           {moversLoading ? <ColumnSkeleton /> : (
-            <div>
-              {(movers?.losers || []).map((q, i) => (
-                <MoverRow key={q.symbol} q={q} rank={i + 1} currSym={currSym} convert={convert} />
-              ))}
-              {(movers?.losers || []).length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-8">No data</p>
-              )}
-            </div>
+            <div>{(movers?.losers || []).map((q, i) => <MoverRow key={q.symbol} q={q} rank={i + 1} currSym={currSym} convert={convert} />)}</div>
           )}
         </div>
 
-        {/* ── Top Winners ──────────────────────────────── */}
         <div className="border-b lg:border-b-0 lg:border-r border-border">
-          <ColHeader
-            icon={<TrendingUp className="h-4 w-4 text-stock-up" />}
-            title="Top Winners"
-            subtitle="Biggest gainers today"
-          />
+          <ColHeader icon={<TrendingUp className="h-4 w-4 text-stock-up" />} title="Top Winners" subtitle="Biggest gainers today" />
           {moversLoading ? <ColumnSkeleton /> : (
-            <div>
-              {(movers?.winners || []).map((q, i) => (
-                <MoverRow key={q.symbol} q={q} rank={i + 1} currSym={currSym} convert={convert} />
-              ))}
-              {(movers?.winners || []).length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-8">No data</p>
-              )}
-            </div>
+            <div>{(movers?.winners || []).map((q, i) => <MoverRow key={q.symbol} q={q} rank={i + 1} currSym={currSym} convert={convert} />)}</div>
           )}
         </div>
 
-        {/* ── AI Picks ─────────────────────────────────── */}
         <div>
-          <ColHeader
-            icon={<Zap className="h-4 w-4 text-primary" />}
-            title="Picks"
-            subtitle="AI-driven contextual picks"
-          />
+          <ColHeader icon={<Zap className="h-4 w-4 text-primary" />} title="Picks" subtitle="AI-driven contextual picks" />
           {picksLoading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
               <p className="text-[10px] text-muted-foreground">Analyzing macro context…</p>
             </div>
           ) : (
+            <div>{(picks?.picks || []).map((p, i) => <PickCard key={p.symbol + i} pick={p} currSym={currSym} convert={convert} />)}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Bonds & Commodities */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="border border-border rounded-lg overflow-hidden bg-card">
+          <ColHeader icon={<span className="text-amber-500 text-sm font-bold">🏦</span>} title="Bonds & Treasuries" subtitle="Yields and bond ETFs" />
+          {bondsLoading ? <ColumnSkeleton rows={8} /> : (
             <div>
-              {(picks?.picks || []).map((p, i) => (
-                <PickCard key={p.symbol + i} pick={p} currSym={currSym} convert={convert} />
+              {(bondQuotes || []).map(q => (
+                <AssetRow key={q.symbol} q={q} name={BOND_NAMES[q.symbol] || q.shortName || q.symbol} currSym={currSym} convert={convert} />
               ))}
-              {(picks?.picks || []).length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-8">No picks available</p>
-              )}
+            </div>
+          )}
+        </div>
+
+        <div className="border border-border rounded-lg overflow-hidden bg-card">
+          <ColHeader icon={<span className="text-orange-500 text-sm font-bold">⛏️</span>} title="Commodities" subtitle="Futures and spot prices" />
+          {commoditiesLoading ? <ColumnSkeleton rows={8} /> : (
+            <div>
+              {(commodityQuotes || []).map(q => (
+                <AssetRow key={q.symbol} q={q} name={COMMODITY_NAMES[q.symbol] || q.shortName || q.symbol} currSym={currSym} convert={convert} />
+              ))}
             </div>
           )}
         </div>
