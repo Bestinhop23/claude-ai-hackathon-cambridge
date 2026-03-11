@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, BarChart3, Loader2, Briefcase, DollarSign, Newspaper } from "lucide-react";
+import { Activity, BarChart3, Loader2, Briefcase, DollarSign, Newspaper, LogIn, LogOut, Crown, User } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
