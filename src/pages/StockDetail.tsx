@@ -150,8 +150,10 @@ const StockDetail = () => {
     }
   }, [quote?.regularMarketPrice, convert]);
 
+  const marketOpen = isMarketOpen();
+
   useEffect(() => {
-    if (quote?.regularMarketPrice == null) return;
+    if (quote?.regularMarketPrice == null || !marketOpen) return;
     const base = convert(quote.regularMarketPrice);
     const interval = setInterval(() => {
       const jitter = base * (Math.random() - 0.5) * 0.0004;
@@ -163,7 +165,7 @@ const StockDetail = () => {
       setTimeout(() => setFlash(null), 200);
     }, 800 + Math.random() * 600);
     return () => clearInterval(interval);
-  }, [quote?.regularMarketPrice, convert]);
+  }, [quote?.regularMarketPrice, convert, marketOpen]);
 
   const profile = profileData?.profile;
   const metrics = profileData?.metrics || {};
