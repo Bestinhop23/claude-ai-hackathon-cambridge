@@ -813,7 +813,13 @@ const StockDetail = () => {
           </div>
         )}
 
-        {/* ═══════ SEC FILINGS TAB ═══════ */}
+        {/* ═══════ SIGNALS TAB ═══════ */}
+        {tab === "signals" && <SignalsTab chartData={chartData6M || []} quote={quote} metrics={metrics} currSym={currSym} />}
+
+        {/* ═══════ ML PREDICTIONS TAB ═══════ */}
+        {tab === "predictions" && <PredictionsTab chartData={chartData5Y || []} symbol={upperSymbol} quote={quote} currSym={currSym} convert={convert} />}
+
+
         {tab === "sec" && (
           <div className="space-y-4">
             <Section icon={Building2} title={`SEC Filings — ${upperSymbol}`} loading={secLoading} badge={<ClaudeBadge label="AI Summaries" />}>
