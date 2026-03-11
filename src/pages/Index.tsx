@@ -197,7 +197,7 @@ const UserMenu = () => {
   );
 };
 
-
+const Index = () => {
   const [tab, setTab] = useState<"data" | "portfolio">("data");
   const navigate = useNavigate();
   return (
