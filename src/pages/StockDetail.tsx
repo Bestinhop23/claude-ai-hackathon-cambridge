@@ -17,7 +17,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import SignalsTab from "@/components/SignalsTab";
+import PredictionsTab from "@/components/PredictionsTab";
 /* ── Claude branding ────────────────────────────────────── */
 const CLAUDE_ORANGE = "#D97757";
 const ClaudeLogo = ({ size = 14 }: { size?: number }) => (
