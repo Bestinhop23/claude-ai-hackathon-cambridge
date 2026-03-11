@@ -272,7 +272,7 @@ const StockDetail = () => {
                         <h1 className="text-lg font-bold text-foreground">{upperSymbol}</h1>
                         <span className="text-[10px] text-muted-foreground">{quote?.shortName || quote?.longName}</span>
                       </div>
-                      <p className="text-[9px] text-muted-foreground">{quote?.exchange} · {quote?.currency}</p>
+                      <p className="text-[9px] text-muted-foreground">{quote?.exchange} · {quote?.currency} · <span className={getMarketStatusColor()}>{getMarketStatusLabel()}</span></p>
                     </div>
                   </div>
                   <div className="flex items-baseline gap-2 mt-3">
