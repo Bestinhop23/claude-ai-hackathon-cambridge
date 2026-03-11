@@ -122,7 +122,7 @@ const StockDetail = () => {
   const { symbol = "" } = useParams();
   const upperSymbol = symbol.toUpperCase();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"overview" | "fundamentals" | "deep" | "news" | "polymarket" | "sec">("overview");
+  const [tab, setTab] = useState<"overview" | "fundamentals" | "deep" | "news" | "polymarket" | "sec" | "signals" | "predictions">("overview");
 
   const { data: quote, isLoading } = useQuote(upperSymbol);
   const { convert, symbol: currSym } = useCurrency();
