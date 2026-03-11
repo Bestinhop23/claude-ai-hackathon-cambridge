@@ -206,6 +206,7 @@ const Index = () => {
           <div className="ml-auto flex items-center gap-2">
             <CurrencySelector />
             <ThemeToggle />
+            <UserMenu />
           </div>
         </div>
       </header>
