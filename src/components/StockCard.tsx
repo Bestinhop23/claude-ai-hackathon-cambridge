@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import StockLogo from "./StockLogo";
+import { isMarketOpen } from "@/lib/market-hours";
 
 interface StockCardProps {
   symbol: string;
@@ -28,8 +29,8 @@ const StockCard = ({
 }: StockCardProps) => {
   const navigate = useNavigate();
   const isPositive = (change ?? 0) >= 0;
+  const marketOpen = isMarketOpen();
   
-  // Simulated live ticker effect
   const [displayPrice, setDisplayPrice] = useState(price);
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
   const prevPrice = useRef(price);
@@ -41,20 +42,21 @@ const StockCard = ({
     }
   }, [price]);
 
+  // Only run live ticker when market is open
   useEffect(() => {
-    if (price == null) return;
+    if (price == null || !marketOpen) return;
     const interval = setInterval(() => {
       const base = price;
-      const jitter = base * (Math.random() - 0.5) * 0.0004; // ±0.02% micro-tick
+      const jitter = base * (Math.random() - 0.5) * 0.0004;
       const newPrice = base + jitter;
       const dir = newPrice > (prevPrice.current ?? base) ? "up" : "down";
       setDisplayPrice(newPrice);
       setFlash(dir);
       prevPrice.current = newPrice;
       setTimeout(() => setFlash(null), 200);
-    }, 800 + Math.random() * 600); // faster: every 0.8-1.4s
+    }, 800 + Math.random() * 600);
     return () => clearInterval(interval);
-  }, [price]);
+  }, [price, marketOpen]);
 
   return (
     <button
