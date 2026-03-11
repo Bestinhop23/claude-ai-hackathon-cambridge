@@ -7,7 +7,8 @@ import {
   ArrowUpRight, ArrowDownRight, Link2, Factory, Truck, Users,
   Crosshair, MapPin, Calendar, DollarSign, Briefcase, Phone, Bot,
 } from "lucide-react";
-import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary, useSecFilings } from "@/hooks/useStockData";
+import { useQuote, useCompanyProfile, useEarnings, useAnalysis, useDeepAnalysis, useNews, useRelevantNews, useSentiment, usePolymarket, usePolymarketSummary, useSecFilings, useChart } from "@/hooks/useStockData";
+import { isMarketOpen, getMarketStatusLabel, getMarketStatusColor } from "@/lib/market-hours";
 import RiskDisclaimer from "@/components/RiskDisclaimer";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import StockChart from "@/components/StockChart";
