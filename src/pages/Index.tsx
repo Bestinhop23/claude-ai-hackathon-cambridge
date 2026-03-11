@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, BarChart3, Loader2, Briefcase, DollarSign, Newspaper } from "lucide-react";
+import { Activity, BarChart3, Loader2, Briefcase, DollarSign, Newspaper, LogIn, LogOut, Crown, User } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import ThemeToggle from "@/components/ThemeToggle";
 import CurrencySelector from "@/components/CurrencySelector";
@@ -169,6 +170,33 @@ const PortfolioTab = () => {
   );
 };
 
+const UserMenu = () => {
+  const { user, tier, signOut } = useAuth();
+  const navigate = useNavigate();
+  if (!user) {
+    return (
+      <button onClick={() => navigate("/auth")} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+        <LogIn className="h-4 w-4" />Sign In
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      {tier !== "basic" && (
+        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+          <Crown className="h-3 w-3" />{tier}
+        </span>
+      )}
+      <button onClick={() => navigate("/pricing")} className="text-xs text-muted-foreground hover:text-foreground">
+        {tier === "basic" ? "Upgrade" : "Plans"}
+      </button>
+      <button onClick={signOut} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <LogOut className="h-4 w-4" />
+      </button>
+    </div>
+  );
+};
+
 const Index = () => {
   const [tab, setTab] = useState<"data" | "portfolio">("data");
   const navigate = useNavigate();
@@ -205,6 +233,7 @@ const Index = () => {
           <div className="ml-auto flex items-center gap-2">
             <CurrencySelector />
             <ThemeToggle />
+            <UserMenu />
           </div>
         </div>
       </header>
