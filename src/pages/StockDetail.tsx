@@ -725,7 +725,7 @@ const StockDetail = () => {
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-[9px] text-muted-foreground">AI search queries:</span>
                 {polyData.queries.map((q: string, i: number) => (
-                  <span key={i} className="text-[8px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">{q}</span>
+                  <a key={i} href={`https://polymarket.com/search?query=${encodeURIComponent(q)}`} target="_blank" rel="noopener noreferrer" className="text-[8px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer">{q}</a>
                 ))}
               </div>
             )}
