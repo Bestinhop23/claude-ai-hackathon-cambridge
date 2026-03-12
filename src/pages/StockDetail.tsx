@@ -817,10 +817,18 @@ const StockDetail = () => {
         )}
 
         {/* ═══════ SIGNALS TAB ═══════ */}
-        {tab === "signals" && <SignalsTab chartData={chartData6M || []} quote={quote} metrics={metrics} currSym={currSym} />}
+        {tab === "signals" && (
+          <SubscriptionGate requiredTier="premium" featureName="Trading Signals">
+            <SignalsTab chartData={chartData6M || []} quote={quote} metrics={metrics} currSym={currSym} />
+          </SubscriptionGate>
+        )}
 
         {/* ═══════ ML PREDICTIONS TAB ═══════ */}
-        {tab === "predictions" && <PredictionsTab chartData={chartData5Y || []} symbol={upperSymbol} quote={quote} currSym={currSym} convert={convert} />}
+        {tab === "predictions" && (
+          <SubscriptionGate requiredTier="unlimited" featureName="ML Predictions">
+            <PredictionsTab chartData={chartData5Y || []} symbol={upperSymbol} quote={quote} currSym={currSym} convert={convert} />
+          </SubscriptionGate>
+        )}
 
 
         {tab === "sec" && (
