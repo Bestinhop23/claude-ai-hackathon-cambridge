@@ -33,6 +33,17 @@ const COMMODITY_NAMES: Record<string, string> = {
   "ZW=F": "Wheat",
 };
 
+const EU_NAMES: Record<string, string> = {
+  "^FTSE": "FTSE 100 (London)",
+  "^GDAXI": "DAX (Frankfurt)",
+  "^FCHI": "CAC 40 (Paris)",
+  "^AEX": "AEX (Amsterdam)",
+  "^IBEX": "IBEX 35 (Madrid)",
+  "^SSMI": "SMI (Zurich)",
+  "^STOXX50E": "Euro Stoxx 50",
+  "^FTSEMIB.MI": "FTSE MIB (Milan)",
+};
+
 /* ── Compact row for winners/losers ─────────────────────── */
 
 function MoverRow({ q, rank, currSym, convert }: {
