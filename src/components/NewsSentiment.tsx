@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNews, useRelevantNews, useSentiment } from "@/hooks/useStockData";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ExternalLink, TrendingUp, TrendingDown, Minus, AlertTriangle, Sparkles, X, Zap, Search } from "lucide-react";
+import { ExternalLink, TrendingUp, TrendingDown, Minus, AlertTriangle, Sparkles, Zap, Search } from "lucide-react";
+import ArticleDialog from "@/components/ArticleDialog";
 
 interface NewsSentimentProps {
   symbol: string;

@@ -197,6 +197,7 @@ const MarketOverview = () => {
   const { data: picks, isLoading: picksLoading } = useMarketPicks();
   const { data: bondQuotes, isLoading: bondsLoading } = useMultiQuote(BOND_SYMBOLS);
   const { data: commodityQuotes, isLoading: commoditiesLoading } = useMultiQuote(COMMODITY_SYMBOLS);
+  const { data: euQuotes, isLoading: euLoading } = useMultiQuote(EU_SYMBOLS);
   const { convert, symbol: currSym } = useCurrency();
 
   const statusLabel = getMarketStatusLabel();
@@ -247,10 +248,22 @@ const MarketOverview = () => {
         </div>
       </div>
 
+      {/* European Markets */}
+      <div className="border border-border rounded-lg overflow-hidden bg-card">
+        <ColHeader icon={<span className="text-sm font-bold">🇪🇺</span>} title="European Markets" subtitle="LSE, Euronext, XETRA & more" />
+        {euLoading ? <ColumnSkeleton rows={8} /> : (
+          <div className="grid grid-cols-1 sm:grid-cols-2">
+            {(euQuotes || []).map(q => (
+              <AssetRow key={q.symbol} q={q} name={EU_NAMES[q.symbol] || q.shortName || q.symbol} currSym={currSym} convert={convert} />
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Bonds & Commodities */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="border border-border rounded-lg overflow-hidden bg-card">
-          <ColHeader icon={<span className="text-amber-500 text-sm font-bold">🏦</span>} title="Bonds & Treasuries" subtitle="Yields and bond ETFs" />
+          <ColHeader icon={<span className="text-sm font-bold">🏦</span>} title="Bonds & Treasuries" subtitle="Yields and bond ETFs" />
           {bondsLoading ? <ColumnSkeleton rows={8} /> : (
             <div>
               {(bondQuotes || []).map(q => (
@@ -261,7 +274,7 @@ const MarketOverview = () => {
         </div>
 
         <div className="border border-border rounded-lg overflow-hidden bg-card">
-          <ColHeader icon={<span className="text-orange-500 text-sm font-bold">⛏️</span>} title="Commodities" subtitle="Futures and spot prices" />
+          <ColHeader icon={<span className="text-sm font-bold">⛏️</span>} title="Commodities" subtitle="Futures and spot prices" />
           {commoditiesLoading ? <ColumnSkeleton rows={8} /> : (
             <div>
               {(commodityQuotes || []).map(q => (
