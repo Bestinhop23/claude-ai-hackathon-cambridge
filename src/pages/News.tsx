@@ -1,4 +1,5 @@
-import { Activity, Newspaper, Loader2, ExternalLink, TrendingUp, TrendingDown, BarChart3, Briefcase } from "lucide-react";
+import { useState } from "react";
+import { Activity, Newspaper, Loader2, TrendingUp, TrendingDown, BarChart3, Briefcase } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useGlobalNews } from "@/hooks/useStockData";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -6,32 +7,14 @@ import CurrencySelector from "@/components/CurrencySelector";
 import StockSearch from "@/components/StockSearch";
 import StockLogo from "@/components/StockLogo";
 import RiskDisclaimer from "@/components/RiskDisclaimer";
-import { toast } from "@/hooks/use-toast";
+import ArticleDialog from "@/components/ArticleDialog";
+import LoadingPulse from "@/components/LoadingPulse";
 
 const News = () => {
   const navigate = useNavigate();
   const { data, isLoading } = useGlobalNews();
   const articles = data?.articles || [];
-
-  const handleArticleClick = (article: any) => {
-    toast({
-      title: article.title,
-      description: (
-        <div className="flex flex-col gap-2 mt-1">
-          <p className="text-xs text-muted-foreground line-clamp-2">{article.description}</p>
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Read Full Article
-          </a>
-        </div>
-      ),
-    });
-  };
+  const [selectedArticle, setSelectedArticle] = useState<any>(null);
 
   return (
     <div className="min-h-screen bg-background">
@@ -85,7 +68,7 @@ const News = () => {
               <div
                 key={i}
                 className="bg-card border border-border rounded-lg p-4 hover:bg-secondary/30 transition-colors cursor-pointer"
-                onClick={() => handleArticleClick(article)}
+                onClick={() => setSelectedArticle(article)}
               >
                 <div className="flex gap-4">
                   {article.urlToImage && (
@@ -157,13 +140,13 @@ const News = () => {
             ))}
           </div>
         ) : isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
+          <LoadingPulse message="Fetching global market news…" submessage="Analyzing headlines with AI" />
         ) : (
           <p className="text-sm text-muted-foreground text-center py-10">No news available</p>
         )}
       </main>
+
+      <ArticleDialog article={selectedArticle} onClose={() => setSelectedArticle(null)} />
     </div>
   );
 };
