@@ -9,6 +9,7 @@ import { Skeleton } from "./ui/skeleton";
 /* ── Bond & Commodity symbols ───────────────────────────── */
 const BOND_SYMBOLS = ["^TNX", "^TYX", "^FVX", "^IRX", "TLT", "SHY", "IEF", "AGG"];
 const COMMODITY_SYMBOLS = ["GC=F", "SI=F", "CL=F", "NG=F", "HG=F", "PL=F", "ZC=F", "ZW=F"];
+const EU_SYMBOLS = ["^FTSE", "^GDAXI", "^FCHI", "^AEX", "^IBEX", "^SSMI", "^STOXX50E", "^FTSEMIB.MI"];
 
 const BOND_NAMES: Record<string, string> = {
   "^TNX": "10-Year Treasury Yield",
