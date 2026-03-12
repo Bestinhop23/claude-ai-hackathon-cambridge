@@ -402,8 +402,8 @@ export function useMarketMovers() {
         losers: (data?.losers || []) as YahooQuote[],
       };
     },
-    refetchInterval: 60000,
-    staleTime: 30000,
+    refetchInterval: 3600000, // refresh every hour
+    staleTime: 3600000,
   });
 }
 
