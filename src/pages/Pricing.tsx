@@ -1,16 +1,35 @@
-import { Activity, Check, Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Activity, Check, Loader2, PartyPopper, Settings } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { TIERS, type TierKey } from "@/lib/subscription-tiers";
 import { toast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const Pricing = () => {
   const navigate = useNavigate();
-  const { user, tier: currentTier } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { user, tier: currentTier, checkSubscription } = useAuth();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // Handle successful checkout return
+  useEffect(() => {
+    if (searchParams.get("success") === "true") {
+      setShowSuccess(true);
+      // Poll subscription status until it updates
+      const poll = async () => {
+        for (let i = 0; i < 10; i++) {
+          await checkSubscription();
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      };
+      poll();
+      // Clear the URL param
+      window.history.replaceState({}, "", "/pricing");
+    }
+  }, [searchParams, checkSubscription]);
 
   const handleCheckout = async (tierKey: TierKey) => {
     if (!user) {
@@ -65,6 +84,18 @@ const Pricing = () => {
       </header>
 
       <main className="container mx-auto px-4 py-12">
+        {/* Success Banner */}
+        {showSuccess && (
+          <div className="max-w-md mx-auto mb-8 bg-stock-up/10 border border-stock-up/30 rounded-xl p-6 text-center">
+            <PartyPopper className="h-10 w-10 text-stock-up mx-auto mb-3" />
+            <h2 className="text-xl font-bold text-foreground mb-1">Welcome to {currentTier !== "basic" ? TIERS[currentTier].name : "your new plan"}!</h2>
+            <p className="text-sm text-muted-foreground mb-4">Your subscription is now active. Enjoy all premium features.</p>
+            <Button onClick={() => { setShowSuccess(false); navigate("/"); }} variant="outline" size="sm">
+              Start Exploring →
+            </Button>
+          </div>
+        )}
+
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-foreground mb-2">Choose Your Plan</h1>
           <p className="text-muted-foreground">Unlock advanced market intelligence</p>
@@ -75,8 +106,12 @@ const Pricing = () => {
             const t = TIERS[key];
             const isCurrent = currentTier === key;
             return (
-              <div key={key} className={`bg-card border rounded-xl p-6 flex flex-col ${highlight ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
-                {highlight && <span className="text-[10px] uppercase tracking-wider text-primary font-bold mb-2">Most Popular</span>}
+              <div key={key} className={`bg-card border rounded-xl p-6 flex flex-col ${
+                isCurrent ? "border-primary ring-2 ring-primary/20" :
+                highlight && !isCurrent ? "border-primary/50 ring-1 ring-primary/10" : "border-border"
+              }`}>
+                {isCurrent && <span className="text-[10px] uppercase tracking-wider text-primary font-bold mb-2 flex items-center gap-1"><Check className="h-3 w-3" />Your Plan</span>}
+                {highlight && !isCurrent && <span className="text-[10px] uppercase tracking-wider text-primary font-bold mb-2">Most Popular</span>}
                 <h3 className="text-xl font-bold text-foreground">{t.name}</h3>
                 <p className="text-3xl font-bold text-foreground mt-2">
                   {t.price === 0 ? "Free" : `$${t.price}`}
@@ -92,9 +127,14 @@ const Pricing = () => {
                 </ul>
                 <div className="mt-6">
                   {isCurrent ? (
-                    <Button variant="outline" className="w-full" disabled={!user || key === "basic"} onClick={handleManage}>
-                      {loadingTier === "manage" ? <Loader2 className="h-4 w-4 animate-spin" /> : key === "basic" ? "Current Plan" : "Manage Subscription"}
-                    </Button>
+                    key === "basic" ? (
+                      <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                    ) : (
+                      <Button variant="outline" className="w-full gap-2" onClick={handleManage} disabled={loadingTier === "manage"}>
+                        {loadingTier === "manage" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" />}
+                        Manage Subscription
+                      </Button>
+                    )
                   ) : (
                     <Button className="w-full" variant={highlight ? "default" : "outline"} onClick={() => key === "basic" ? navigate("/") : handleCheckout(key)} disabled={loadingTier === key}>
                       {loadingTier === key ? <Loader2 className="h-4 w-4 animate-spin" /> : key === "basic" ? "Get Started" : `Upgrade to ${t.name}`}

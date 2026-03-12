@@ -19,6 +19,8 @@ import StockSearch from "@/components/StockSearch";
 import { Skeleton } from "@/components/ui/skeleton";
 import SignalsTab from "@/components/SignalsTab";
 import PredictionsTab from "@/components/PredictionsTab";
+import SubscriptionGate from "@/components/SubscriptionGate";
+import LoadingPulse from "@/components/LoadingPulse";
 /* ── Claude branding ────────────────────────────────────── */
 const CLAUDE_ORANGE = "#D97757";
 const ClaudeLogo = ({ size = 14 }: { size?: number }) => (
@@ -723,7 +725,7 @@ const StockDetail = () => {
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-[9px] text-muted-foreground">AI search queries:</span>
                 {polyData.queries.map((q: string, i: number) => (
-                  <span key={i} className="text-[8px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">{q}</span>
+                  <a key={i} href={`https://polymarket.com/search?query=${encodeURIComponent(q)}`} target="_blank" rel="noopener noreferrer" className="text-[8px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer">{q}</a>
                 ))}
               </div>
             )}
@@ -815,10 +817,18 @@ const StockDetail = () => {
         )}
 
         {/* ═══════ SIGNALS TAB ═══════ */}
-        {tab === "signals" && <SignalsTab chartData={chartData6M || []} quote={quote} metrics={metrics} currSym={currSym} />}
+        {tab === "signals" && (
+          <SubscriptionGate requiredTier="premium" featureName="Trading Signals">
+            <SignalsTab chartData={chartData6M || []} quote={quote} metrics={metrics} currSym={currSym} />
+          </SubscriptionGate>
+        )}
 
         {/* ═══════ ML PREDICTIONS TAB ═══════ */}
-        {tab === "predictions" && <PredictionsTab chartData={chartData5Y || []} symbol={upperSymbol} quote={quote} currSym={currSym} convert={convert} />}
+        {tab === "predictions" && (
+          <SubscriptionGate requiredTier="unlimited" featureName="ML Predictions">
+            <PredictionsTab chartData={chartData5Y || []} symbol={upperSymbol} quote={quote} currSym={currSym} convert={convert} />
+          </SubscriptionGate>
+        )}
 
 
         {tab === "sec" && (

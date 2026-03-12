@@ -46,8 +46,8 @@ export function useQuote(symbol: string) {
       return (data?.quoteResponse?.result?.[0] as YahooQuote) || null;
     },
     enabled: !!symbol,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
 }
 
@@ -402,8 +402,8 @@ export function useMarketMovers() {
         losers: (data?.losers || []) as YahooQuote[],
       };
     },
-    refetchInterval: 60000,
-    staleTime: 30000,
+    refetchInterval: 3600000, // refresh every hour
+    staleTime: 3600000,
   });
 }
 
@@ -465,7 +465,8 @@ export function useGlobalNews() {
       const data = await fetchStockData("global-news", {});
       return { articles: data?.articles || [] };
     },
-    staleTime: 300000,
+    refetchInterval: 3600000, // refresh every hour
+    staleTime: 3600000,
   });
 }
 
