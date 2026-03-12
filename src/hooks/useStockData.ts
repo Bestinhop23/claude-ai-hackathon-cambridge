@@ -465,7 +465,8 @@ export function useGlobalNews() {
       const data = await fetchStockData("global-news", {});
       return { articles: data?.articles || [] };
     },
-    staleTime: 300000,
+    refetchInterval: 3600000, // refresh every hour
+    staleTime: 3600000,
   });
 }
 
