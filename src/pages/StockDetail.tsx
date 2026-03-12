@@ -19,6 +19,8 @@ import StockSearch from "@/components/StockSearch";
 import { Skeleton } from "@/components/ui/skeleton";
 import SignalsTab from "@/components/SignalsTab";
 import PredictionsTab from "@/components/PredictionsTab";
+import SubscriptionGate from "@/components/SubscriptionGate";
+import LoadingPulse from "@/components/LoadingPulse";
 /* ── Claude branding ────────────────────────────────────── */
 const CLAUDE_ORANGE = "#D97757";
 const ClaudeLogo = ({ size = 14 }: { size?: number }) => (
