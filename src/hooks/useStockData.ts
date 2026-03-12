@@ -46,8 +46,8 @@ export function useQuote(symbol: string) {
       return (data?.quoteResponse?.result?.[0] as YahooQuote) || null;
     },
     enabled: !!symbol,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
 }
 
