@@ -201,47 +201,7 @@ const NewsSentiment = ({ symbol, companyName }: NewsSentimentProps) => {
         )}
       </div>
 
-      {/* Article Detail Modal */}
-      {selectedArticle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm" onClick={() => setSelectedArticle(null)}>
-          <div className="bg-card border border-border rounded-xl shadow-2xl max-w-xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">{selectedArticle.source?.name}</span>
-              <button onClick={() => setSelectedArticle(null)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {selectedArticle.urlToImage && (
-              <img src={selectedArticle.urlToImage} alt="" className="w-full h-48 object-cover" />
-            )}
-            <div className="p-4 space-y-3">
-              <h2 className="text-lg font-semibold text-foreground">{selectedArticle.title}</h2>
-              <p className="text-xs text-muted-foreground">
-                {selectedArticle.author && `By ${selectedArticle.author} · `}
-                {selectedArticle.publishedAt && new Date(selectedArticle.publishedAt).toLocaleString()}
-              </p>
-              {selectedArticle._query && (
-                <p className="text-xs text-[#D97757] flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  AI search: "{selectedArticle._query}"
-                </p>
-              )}
-              <p className="text-sm text-foreground leading-relaxed">{selectedArticle.description}</p>
-              {selectedArticle.content && (
-                <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.content.replace(/\[\+\d+ chars\]/, "")}</p>
-              )}
-              <a
-                href={selectedArticle.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-              >
-                Read full article <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
+      <ArticleDialog article={selectedArticle} onClose={() => setSelectedArticle(null)} />
     </div>
   );
 };
