@@ -48,10 +48,17 @@ serve(async (req) => {
     }
 
     const sub = subscriptions.data[0];
+    let subscriptionEnd: string | null = null;
+    if (sub.current_period_end) {
+      const ts = typeof sub.current_period_end === "number" ? sub.current_period_end : Number(sub.current_period_end);
+      if (!isNaN(ts) && ts > 0) {
+        subscriptionEnd = new Date(ts * 1000).toISOString();
+      }
+    }
     return new Response(JSON.stringify({
       subscribed: true,
-      product_id: sub.items.data[0].price.product,
-      subscription_end: new Date(sub.current_period_end * 1000).toISOString(),
+      product_id: sub.items.data[0]?.price?.product ?? null,
+      subscription_end: subscriptionEnd,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
